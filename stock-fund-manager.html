@@ -796,7 +796,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06h';   // h=在06g全优化基础上：①删除CloudStudio沙箱注入的beacon埋点脚本 ②基金深度分析5张画布用CSS显式锁高(净值/收益/热力150px·回撤/滚动140px)·彻底收敛视图占地·修CSS特异性坑 ③源头修复：从sh1部署沙箱拉回完整06g版本覆盖本地残缺源文件(此前源文件停在04g致06c-06g优化丢失)   // g=5处布局/交互打磨：①行情看板自选栏撑满高度+内部滚动(align-items:stretch;去max-height) ②基金净值视图改左列表+右净值图(与行情看板同构) ③建仓分析加标的选择器(下拉+输代码,不依赖去自选点) ④基金深度分析画布整体收紧(5张canvas缩小+间距/字号) ⑤顶部指数条加美股3指数(道琼斯/纳斯达克/标普500)+分隔线。仅布局/交互/展示，逻辑不动。无概率无预测。
+const APP_VER = '2026-08-06i';   // i=修复顶部美股指数无数据: ①INDEXES/demo字典代码 gb_*→s_us*(标普500用s_usINX) ②parseTencent新增美股简化解析分支(f.length<35时取f[3]现价/f[4]涨跌额/f[5]涨跌幅%)
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -900,7 +900,7 @@ function demoIndex(code){
   const map={
     sh000001:['上证指数',3412.34,-0.42], sz399001:['深证成指',10756.21,0.31],
     sz399006:['创业板指',2189.55,0.88], sh000300:['沪深300',3945.67,-0.15], sh000688:['科创50',962.13,1.12],
-    gb_dji:['道琼斯',38900.12,0.55], gb_ixic:['纳斯达克',16800.45,-0.32], gb_inx:['标普500',5210.30,0.18]
+    s_usDJI:['道琼斯',54349.12,0.49], s_usIXIC:['纳斯达克',26363.44,-0.83], s_usINX:['标普500',7723.55,-0.17]
   };
   const d=map[code]||[code,3000,0]; const price=d[1], cp=d[2];
   return {code,name:d[0],price,changePct:cp,change:+(price*cp/100).toFixed(2),prevClose:+(price/(1+cp/100)).toFixed(2),open:price,high:+(price*1.005).toFixed(2),low:+(price*0.995).toFixed(2),time:ts()};
@@ -954,7 +954,13 @@ function parseTencent(text){
   const re=/v_(\w+)="([^"]*)"/g; let m;
   while((m=re.exec(text))){
     const code=m[1]; const f=m[2].split('~');
-    if(f.length<35) continue;
+    if(f.length<35){
+      // 美股/海外指数简化格式: f[3]=现价 f[4]=涨跌额(点) f[5]=涨跌幅%
+      if(f.length>=6){
+        out[code]={code,name:f[1]||code,price:parseFloat(f[3])||0,prevClose:0,open:0,time:'',change:parseFloat(f[4])||0,changePct:parseFloat(f[5])||0,high:0,low:0,volume:0,amount:0,turnover:0,pe:0,amplitude:0,mktCap:0,pb:0,limitUp:0,limitDown:0,ask:[],bid:[]};
+      }
+      continue;
+    }
     out[code]={
       code, name:f[1]||code, price:parseFloat(f[3]), prevClose:parseFloat(f[4]),
       open:parseFloat(f[5]), time:f[30]||'', change:parseFloat(f[31]), changePct:parseFloat(f[32]),
@@ -990,7 +996,7 @@ const CODE_NAMES={
 const INDEXES=[
   {code:'sh000001',name:'上证指数'},{code:'sz399001',name:'深证成指'},{code:'sz399006',name:'创业板指'},{code:'sh000300',name:'沪深300指数'},{code:'sh000688',name:'科创50'},
   {sep:true},
-  {code:'gb_dji',name:'道琼斯',grp:'us'},{code:'gb_ixic',name:'纳斯达克',grp:'us'},{code:'gb_inx',name:'标普500',grp:'us'}
+  {code:'s_usDJI',name:'道琼斯',grp:'us'},{code:'s_usIXIC',name:'纳斯达克',grp:'us'},{code:'s_usINX',name:'标普500',grp:'us'}
 ];
 let indexQuotes={};
 function refreshIndices(){
