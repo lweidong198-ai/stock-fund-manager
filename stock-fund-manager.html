@@ -796,7 +796,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06m';   // m=一次性根治持仓基金总市值为0: 兼容旧版本误存kind=stock且带sz前缀的基金码; 新增isLikelyFundCode/fundCodesToLoad, loadFund规整裸码, priceOf/renderHold/selectCode/init/import/refresh全路径按基金型代码加载净值(不再依赖kind标记)
+const APP_VER = '2026-08-06n';   // n=根治「股票被误判成基金→现价/市值错算」: 新增isFundKind(存储kind优先, 仅kind缺失时回退代码启发式), priceOf/renderHold分组/selectCode/fundCodesToLoad/addHold/cleanseWatch 全改用isFundKind; 新增cleanseHold()在启动时把误存成股票的基金码(如sz012863)纠正回基金; 600519(贵州茅台)等正规股票不再被当基金取演示净值
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -867,8 +867,11 @@ function normCode(raw){
 }
 // 是否为“疑似基金代码”：6位纯数字且非场内ETF/LOF特征码(159/50/51/52/56/58/59开头) → 按基金加载净值
 function isLikelyFundCode(raw){ const c=String(raw||'').replace(/^(sz|sh|hk|us)/i,''); if(!/^\d{6}$/.test(c)) return false; return !/^(50|51|52|56|58|59|15)\d{4}$/.test(c); }
+// 分类判断：存储的 kind 优先（股票就是股票、基金就是基金）；仅在 kind 缺失时回退代码启发式
+// 这样 600519(贵州茅台) 等正规股票不会被误判成基金、错用演示基金净值
+function isFundKind(code){ const k=kindOf(code); if(k==='fund') return true; if(k==='stock') return false; return isLikelyFundCode(code); }
 // 收集需要加载基金净值的代码(含 kind=fund 与疑似基金码，统一规整为东方财富裸码)
-function fundCodesToLoad(){ const set=new Set(); [...(state.watch||[]),...(state.hold||[])].forEach(x=>{ if(x&&x.code&&(x.kind==='fund'||isLikelyFundCode(x.code))) set.add(String(x.code).replace(/^(sz|sh|hk|us)/i,'')); }); return [...set]; }
+function fundCodesToLoad(){ const set=new Set(); [...(state.watch||[]),...(state.hold||[])].forEach(x=>{ if(x&&x.code&&isFundKind(x.code)) set.add(String(x.code).replace(/^(sz|sh|hk|us)/i,'')); }); return [...set]; }
 
 /* ============ 持久化 ============ */
 function save(){
@@ -890,7 +893,7 @@ function load(){
     save();
   }
   if(!state.selected) state.selected = (state.watch.find(w=>w.kind==='stock')||state.watch[0]||{}).code || null;
-  cleanseWatch(); // 异步清洗历史被误加 sz/sh 前缀的基金码(如 sz003304→003304+基金)
+  cleanseWatch(); cleanseHold(); // 异步清洗历史被误加/误存的基金码(如 sz012863→012863+基金、600519 股票不会被当基金)
 }
 
 /* ============ 离线演示数据兜底 ============
@@ -2650,7 +2653,7 @@ function renderHoldSelect(){
   state.watch.forEach(w=>{ const o=document.createElement('option'); o.value=w.code+' '+nameOf(w.code); dl.appendChild(o); });
 }
 function kindOf(code){ const h=state.hold.find(x=>x.code===code); if(h) return h.kind; const w=state.watch.find(x=>x.code===code); if(w) return w.kind; return null; }
-function priceOf(code){ const bare=String(code||'').replace(/^(sz|sh|hk|us)/i,''); const k=kindOf(code); if(k==='fund'||isLikelyFundCode(code)){ const fd=state.fundData[bare]; if(fd&&fd.latest) return fd.latest; } const q=state.quotes[code]||state.quotes[bare]; return q?q.price:0; }
+function priceOf(code){ const bare=String(code||'').replace(/^(sz|sh|hk|us)/i,''); if(isFundKind(code)){ const fd=state.fundData[bare]; if(fd&&fd.latest) return fd.latest; } const q=state.quotes[code]||state.quotes[bare]; return q?q.price:0; }
 function nameOf(code){
   const k=kindOf(code);
   if(k==='fund'){ const fd=state.fundData[code]; if(fd&&fd.name) return fd.name; }
@@ -2664,8 +2667,8 @@ function renderHold(){
   if(!state.hold.length){ box.innerHTML='<div class="empty-state"><div class="es-icon">💼</div><div class="es-title">暂无持仓</div><div class="es-desc">在上方输入代码、数量、成本价，点「加持仓」开始记录。<br>持仓与自选互相独立，不必先加自选。</div><div class="es-actions"><button class="ghost" onclick="goView(\'market\')">去行情看板选标的 →</button></div></div>'; sum.innerHTML=''; return; }
   let totMV=0, totCost=0, totPL=0, totDay=0;
   const groups=[
-    {label:'股票 / ETF', items: state.hold.filter(h=>!(h.kind==='fund'||isLikelyFundCode(h.code)))},
-    {label:'基金',       items: state.hold.filter(h=>h.kind==='fund'||isLikelyFundCode(h.code))}
+    {label:'股票 / ETF', items: state.hold.filter(h=>!isFundKind(h.code))},
+    {label:'基金',       items: state.hold.filter(h=>isFundKind(h.code))}
   ];
   let html='';
   groups.forEach(g=>{
@@ -2675,7 +2678,7 @@ function renderHold(){
       const p=priceOf(h.code), n=h.shares, c=h.cost;
       const m=n*p, co=n*c, pl=m-co, plp=co?pl/co*100:0;
       let day=0;
-      if(h.kind==='fund'||isLikelyFundCode(h.code)){ const _bare=String(h.code).replace(/^(sz|sh|hk|us)/i,''); if(needsFund(_bare)) loadFund(h.code); const fd=state.fundData[_bare]; if(fd&&fd.prev) day=n*(fd.latest-fd.prev); }
+      if(isFundKind(h.code)){ const _bare=String(h.code).replace(/^(sz|sh|hk|us)/i,''); if(needsFund(_bare)) loadFund(h.code); const fd=state.fundData[_bare]; if(fd&&fd.prev) day=n*(fd.latest-fd.prev); }
       else { const q=state.quotes[h.code]; if(q&&q.changePct!=null) day=m*q.changePct/(100+q.changePct); }
       day=Math.round(day*100)/100;
       totMV+=m; totCost+=co; totPL+=pl; totDay+=day; gmv+=m; gcost+=co; gpl+=pl; gday+=day;
@@ -2771,8 +2774,21 @@ function cleanseWatch(){                         // 异步清洗历史被误加 
       detectKind(w.code).then(r=>{
         if(r.code!==w.code || r.kind!==w.kind){
           w.code=r.code; w.kind=r.kind; save();
-          if(r.kind==='fund'||isLikelyFundCode(r.code)){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); } else refreshQuotes();
+          if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); } else refreshQuotes();
           renderWatch(); renderHoldSelect();
+        }
+      }).catch(()=>{});
+    }
+  });
+}
+function cleanseHold(){                          // 异步清洗历史被误存成股票的基金码(如 sz012863→012863+基金)
+  state.hold.forEach(h=>{
+    if(/^(sh|sz|hk)(\d{6})$/i.test(h.code) || /^\d{6}$/.test(h.code)){
+      detectKind(h.code).then(r=>{
+        if(r.code!==h.code || r.kind!==h.kind){
+          h.code=r.code; h.kind=r.kind; save();
+          if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); } else refreshQuotes();
+          renderHold(); renderHoldSelect();
         }
       }).catch(()=>{});
     }
@@ -2783,7 +2799,7 @@ function selectCode(code){
   state.selected=code;
   const w=state.watch.find(x=>x.code===code);
   renderWatch();
-  const isFund = !!(w && (w.kind==='fund' || isLikelyFundCode(w.code)));
+  const isFund = !!(w && isFundKind(w.code));
   if(isFund && needsFund(code)) loadFund(code);
   const v=state.view;
   // 建仓分析同时支持股票/基金 → 原地刷新，绝不切走（修复"看A基金分析、点B基金被拽走"）
@@ -2818,7 +2834,7 @@ async function addHold(raw, shares, cost){
     else state.hold.push({code:r.code, kind:r.kind, shares, cost});
     if(!state.watch.some(w=>w.code===r.code)){ state.watch.push({code:r.code, kind:r.kind}); } // 加持仓同步进自选：自选可见行情+持仓中角标
     save();
-    if(r.kind==='fund'||isLikelyFundCode(r.code)){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); }
+    if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); }
     else { await ensureStockQuote(r.code); }
     refreshQuotes();
     renderWatch(); renderHold(); renderHoldSelect();
