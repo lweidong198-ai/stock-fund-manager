@@ -796,7 +796,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06j';   // j=修复行情看板点基金/基金模块点股票时导航高亮不更新(模块归属错乱): selectCode 去掉 showView 的 keepNav=true, 切视图同时同步左侧导航高亮
+const APP_VER = '2026-08-06l';   // l=修复刷新页面后持仓基金净值仍为0(真根因): init只遍历state.watch加载基金, 不加载state.hold里的基金, 导致只加持仓未加自选的基金刷新后fundData为空; 改为watch+hold并集全部loadFund
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -1204,7 +1204,7 @@ function applyFundData(code, fd){
   if(!fd) return;
   state.fundData[code]=fd;
   if(state.selected===code) renderFund();
-  renderWatch();
+  renderWatch(); renderHold();
   if(state.view==='fundAnalysis' && state.faCode===code) renderFundAnalysis();
   setDemo(false); setDataStatus('ok');
 }
@@ -1212,7 +1212,7 @@ function useDemoFund(code){
   const fd=demoFund(code);
   state.fundData[code]=fd;
   if(state.selected===code) renderFund();
-  renderWatch();
+  renderWatch(); renderHold();
   if(state.view==='fundAnalysis' && state.faCode===code) renderFundAnalysis();
   setDemo(true); setDataStatus('demo');
 }
@@ -3230,7 +3230,8 @@ refreshIndices();
 showView('home');
 if(!state.selected && state.watch.length){ state.selected=state.watch[0].code; } // 默认选中第一只，避免初次进各视图空白
 renderWatch(); renderHold(); renderHoldSelect(); renderFund();
-if(state.watch.length){ state.watch.forEach(w=>{ if(w.kind==='fund') loadFund(w.code); }); refreshQuotes(); }
+const _funds=[...new Set([...state.watch.filter(w=>w.kind==='fund'), ...state.hold.filter(h=>h.kind==='fund')].map(x=>x.code))];
+if(_funds.length){ _funds.forEach(c=>loadFund(c)); } refreshQuotes();
 renderGlobalRegime();   // 顶部常驻市况战略透镜（异步拉沪深300近60日，不阻塞首屏）
 startTimer();
 
