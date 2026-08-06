@@ -796,7 +796,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06i';   // i=修复顶部美股指数无数据: ①INDEXES/demo字典代码 gb_*→s_us*(标普500用s_usINX) ②parseTencent新增美股简化解析分支(f.length<35时取f[3]现价/f[4]涨跌额/f[5]涨跌幅%)
+const APP_VER = '2026-08-06j';   // j=修复行情看板点基金/基金模块点股票时导航高亮不更新(模块归属错乱): selectCode 去掉 showView 的 keepNav=true, 切视图同时同步左侧导航高亮
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -2787,10 +2787,10 @@ function selectCode(code){
   if(v==='fundAnalysis'){ return; }
   // 行情看板只看股票/ETF，点到基金就智能切到基金净值；基金净值同理
   if(isFund){
-    if(v!=='fund') showView('fund', true);
+    if(v!=='fund') showView('fund');
     renderFund();
   } else {
-    if(v!=='market') showView('market', true);
+    if(v!=='market') showView('market');
     renderDetail();
   }
 }
