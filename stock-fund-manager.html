@@ -801,7 +801,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07s';   // s=修复重大回归: 腾讯fqkline对"从未除权"的标的(多数ETF/全部指数)只返回day/week而无qfqday/qfqweek, 旧版取空→静默回退演示假数据(如电池ETF只剩130根假K线); 现改为 qfq缺失自动回退原始字段, 并新增分段翻页(单次上限约640根→最多3段≈1900根)补齐历史。
+const APP_VER = '2026-08-07t';   // t=修复06q起潜伏的高危bug: 腾讯fqkline真实字段顺序为[date,open,close,HIGH,LOW,vol](high在low前), 旧代码误读为high=x[4]/low=x[3]导致high/low对调→全样本high<low非法棒; 直接污染KDJ(RSV分母分子错乱, J出现±40000极值)且K线影线反向绘制。现修正为high=x[3]/low=x[4]; BOLL/MACD/RSI/MA只用close不受影响。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -1194,7 +1194,7 @@ function loadKline(code, period, cb, opt){
     const today = new Date().toISOString().slice(0,10);
     // 腾讯 fqkline 单次最多返回约 640 根；日期区间参数有效，可用「滚动 end 日期」分段向前翻页
     const SEG = 640, MAX_SEG = 3;   // 最多 3 段 ≈ 1900 根（日线约 7.5 年），够用且不拖慢加载
-    const rowsToKl = rows => rows.map(x=>({ date:x[0], open:+x[1], high:+x[4], low:+x[3], close:+x[2], vol:+x[5] }))
+    const rowsToKl = rows => rows.map(x=>({ date:x[0], open:+x[1], high:+x[3], low:+x[4], close:+x[2], vol:+x[5] }))
                                  .filter(x=>x.close>0 && x.date);
     const fetchSeg = (endDate) => {
       const url='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+code+','+ptype+',1990-01-01,'+endDate+','+SEG+',qfq&_='+Date.now()+Math.random();
