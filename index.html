@@ -849,7 +849,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07y';   // y=资金流向模块改用真实数据: 核心大数字改东方财富JSONP真实"主力资金净流入"(零Key·脚本注入绕过CORS, kline klt=1 lmt=1拿今日累计主力净流入, 已验证茅台今日-1.16亿与daykline吻合); 腾讯内外盘+五档作辅助(确定正确); secid转换sh→1./sz→0./hk→116./us→100.; 拉不到诚实提示"东方财富暂不可达"不编造。之前x版是内外盘代理(非真实主力金额), 本次升级为真实源。
+const APP_VER = '2026-08-07z';   // z=修复资金流向模块"什么都不显示"的致命bug: showView()遍历的视图列表漏了'flow', 导致viewFlow永远display:none(切过去了但整个容器隐藏)。已补'flow'到列表; 外层viewFlow用block(.card内部.flow-grid才grid, 避免布局错乱); 顺手修正loadFundFlow主力净占比解析(原/100000明显错→自适应/100)。goView('flow')分支与renderFlow本身均正常。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -2190,7 +2190,7 @@ function drawNav(canvasId, fd){
 
 /* ============ 视图切换 ============ */
 function showView(v, keepNav){
-  ['home','market','hold','fund','analysis','fundAnalysis','sectors','rotation','datacenter'].forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display=(x===v)?((x==='market'||x==='fund')?'grid':'block'):'none'; });
+  ['home','market','hold','fund','analysis','fundAnalysis','sectors','rotation','flow','datacenter'].forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display=(x===v)?((x==='market'||x==='fund')?'grid':'block'):'none'; });
   if(!keepNav) document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('on', n.dataset.view===v));
   state.view=v;
   if(v==='home') renderHome();
@@ -2254,7 +2254,7 @@ function loadFundFlow(code, cb){
       if(!kl||!kl.length){ cb(null); return; }
       const p=kl[0].split(',');
       const main=parseFloat(p[1]);
-      const mainPct=(p[2]!=null)?parseFloat(p[2])/100000:null; // 东财主力净占比按×1e5存储
+      let mp=parseFloat(p[2]); if(!isNaN(mp)){ if(Math.abs(mp)>100) mp=mp/100; } else mp=null; const mainPct=mp; // 东财主力净占比: 部分接口按×100存储(-253→-2.53%)
       cb({main, mainPct, raw:p});
     }catch(e){ cb(null); }
   };
