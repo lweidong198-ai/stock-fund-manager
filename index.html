@@ -849,7 +849,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07z';   // z=修复资金流向模块"什么都不显示"的致命bug: showView()遍历的视图列表漏了'flow', 导致viewFlow永远display:none(切过去了但整个容器隐藏)。已补'flow'到列表; 外层viewFlow用block(.card内部.flow-grid才grid, 避免布局错乱); 顺手修正loadFundFlow主力净占比解析(原/100000明显错→自适应/100)。goView('flow')分支与renderFlow本身均正常。
+const APP_VER = '2026-08-07aa';  // aa=修复资金流向两处问题: ①右表"名称"列undefined: 原用ww.name/qq.name可能缺失,改统一走nameOf()兜底(CODE_NAMES/quotes.name/代码); ②东财主力净占比字段错位: f57主力净占比在返回数组p[6],原误读p[2](小单净流入),已修正。同时增强loadFundFlow错误码(nosecid/empty/parse/net/timeout)与重试按钮,失败提示更诚实。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -2242,7 +2242,7 @@ function fmtMoney(v){
 // 东方财富 真实主力资金净流入（零Key·JSONP绕过CORS）。kline klt=1 lmt=1 返回今日累计主力净流入(额)。
 function loadFundFlow(code, cb){
   const secid=toSecid(code);
-  if(!secid){ cb(null); return; }
+  if(!secid){ cb({err:'nosecid'}); return; }
   const cbName='emff'+Math.random().toString(36).slice(2,10);
   const t=Date.now();
   const url='https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?lmt=1&klt=1&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&secid='+encodeURIComponent(secid)+'&cb='+cbName+'&_='+t;
@@ -2251,19 +2251,19 @@ function loadFundFlow(code, cb){
     if(done) return; done=true;
     try{
       const kl=json&&json.data&&json.data.klines;
-      if(!kl||!kl.length){ cb(null); return; }
+      if(!kl||!kl.length){ cb({err:'empty'}); return; }
       const p=kl[0].split(',');
-      const main=parseFloat(p[1]);
-      let mp=parseFloat(p[2]); if(!isNaN(mp)){ if(Math.abs(mp)>100) mp=mp/100; } else mp=null; const mainPct=mp; // 东财主力净占比: 部分接口按×100存储(-253→-2.53%)
-      cb({main, mainPct, raw:p});
-    }catch(e){ cb(null); }
+      const main=parseFloat(p[1]);          // f52 主力净流入(元)
+      const mainPct=parseFloat(p[6]);      // f57 主力净占比(%)
+      cb({main, mainPct:isNaN(mainPct)?null:mainPct, raw:p});
+    }catch(e){ cb({err:'parse'}); }
   };
   const s=document.createElement('script');
   s.src=url;
-  s.onerror=function(){ if(!done){ done=true; cb(null); } if(s.parentNode) s.parentNode.removeChild(s); };
+  s.onerror=function(){ if(!done){ done=true; cb({err:'net'}); } if(s.parentNode) s.parentNode.removeChild(s); };
   s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
   document.body.appendChild(s);
-  setTimeout(function(){ if(!done){ done=true; cb(null); } }, 8000); // 超时兜底(离线/不可达)
+  setTimeout(function(){ if(!done){ done=true; cb({err:'timeout'}); } }, 8000); // 超时兜底(离线/不可达)
 }
 function flowPick(code){ state.selected=code; renderFlow(); }
 function renderFlow(){
@@ -2272,7 +2272,7 @@ function renderFlow(){
   const q=state.quotes[sel];
   const w=state.watch.find(x=>x.code===sel);
   const selEl=$('flowSel');
-  const name=(w?w.name:(q?q.name:sel))||sel;
+  const name=nameOf(sel);
   // —— 腾讯内外盘 + 五档（确定正确，即时）——
   if(!q || (!q.outer && !q.inner && (!q.bid||!q.bid.length) && (!q.ask||!q.ask.length))){
     selEl.innerHTML='<div class="flow-name">'+name+' <span class="code">'+sel+'</span></div><div class="empty">当前选中「'+name+'」行情还在加载，或暂无内外盘数据（美股/基金无此字段）。<br>等行情刷新、或点左侧自选列表任意一行即可。</div>';
@@ -2299,14 +2299,15 @@ function renderFlow(){
   if(sel && !sel.startsWith('us')){
     loadFundFlow(sel, function(ff){
       const card=$('flowMainCard'); if(!card) return;
-      if(!ff || isNaN(ff.main)){
-        card.innerHTML='<span class="down">获取失败</span><div class="meta">东方财富接口暂不可达（需联网），上方内外盘数据仍有效</div>';
+      if(ff && !isNaN(ff.main)){
+        const mc=ff.main>0?'up':(ff.main<0?'down':'flat');
+        const sign=ff.main>=0?'+':'';
+        const pctTxt=(ff.mainPct!=null)?(' · 占成交额约 '+(ff.mainPct>0?'+':'')+ff.mainPct.toFixed(2)+'%'):'';
+        card.innerHTML='<span class="'+mc+'">'+sign+fmtMoney(ff.main)+'</span><div class="meta">今日主力净流入 '+(mc==='up'?'资金流入':(mc==='down'?'资金流出':'均衡'))+pctTxt+'</div>';
         return;
       }
-      const mc=ff.main>0?'up':(ff.main<0?'down':'flat');
-      const sign=ff.main>=0?'+':'';
-      const pctTxt=(ff.mainPct!=null)?(' · 占成交额约 '+(ff.mainPct>0?'+':'')+ff.mainPct.toFixed(2)+'%'):'';
-      card.innerHTML='<span class="'+mc+'">'+sign+fmtMoney(ff.main)+'</span><div class="meta">今日主力净流入 '+(mc==='up'?'资金流入':(mc==='down'?'资金流出':'均衡'))+pctTxt+'</div>';
+      const errMsg = ff && ff.err==='nosecid' ? '当前代码不支持主力资金流' : (ff && ff.err==='timeout' ? '请求超时' : '东方财富接口暂不可达（需联网）');
+      card.innerHTML='<span class="down">获取失败</span><div class="meta">'+errMsg+'，上方腾讯内外盘数据仍有效。如遇企业网络/沙箱限制，请在普通浏览器打开。</div><button class="ghost" style="margin-top:6px;font-size:12px;padding:4px 10px;" onclick="renderFlow()">↻ 重试</button>';
     });
   } else {
     const card=$('flowMainCard'); if(card) card.innerHTML='<span class="flat">美股无主力资金流数据</span>';
@@ -2318,12 +2319,12 @@ function renderFlow(){
   state.hold.forEach(h=>codes.add(h.code));
   const rows=[];
   codes.forEach(c=>{
-    const qq=state.quotes[c]; const ww=state.watch.find(x=>x.code===c)||state.hold.find(x=>x.code===c);
+    const qq=state.quotes[c];
     if(!qq || (!qq.outer && !qq.inner)) return;
     const o=qq.outer||0, i=qq.inner||0, t=o+i;
     const buyPct=t>0?o/t*100:50;
     const net=o-i;
-    rows.push({code:c, name:ww?ww.name:qq.name, buyPct, net, price:qq.price, cp:qq.changePct});
+    rows.push({code:c, name:nameOf(c), buyPct, net, price:qq.price, cp:qq.changePct});
   });
   rows.sort((a,b)=>b.buyPct-a.buyPct);
   if(!rows.length){ listEl.innerHTML='<div class="empty">暂无股票/ETF 行情数据。点左侧自选列表、或在行情看板加自选后，这里会列出它们的资金力道。</div>'; }
