@@ -801,7 +801,8 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07r';   // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
+const APP_VER = '2026-08-07s';   // s=修复重大回归: 腾讯fqkline对"从未除权"的标的(多数ETF/全部指数)只返回day/week而无qfqday/qfqweek, 旧版取空→静默回退演示假数据(如电池ETF只剩130根假K线); 现改为 qfq缺失自动回退原始字段, 并新增分段翻页(单次上限约640根→最多3段≈1900根)补齐历史。
+// r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
 const LS_WATCH = 'sfm_watch_v2';
@@ -1188,15 +1189,44 @@ function loadKline(code, period, cb, opt){
   // A股/ETF 用腾讯前复权，消除除权/拆分/分红导致的BOLL/MA/MACD椭圆失真
   if(/^sh|^sz/i.test(code)){
     const ptype = period==='w'?'week':'day';
-    const field = period==='w'?'qfqweek':'qfqday';
-    const end = new Date().toISOString().slice(0,10);
-    // 腾讯该接口 count>2000 会 param error，且返回最近 N 根（start 实际被忽略）
-    const url='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+code+','+ptype+',2010-01-01,'+end+',2000,qfq&_='+Date.now();
-    fetch(url).then(r=>r.json()).then(j=>{
-      const arr = ((((j||{}).data||{})[code])||{})[field] || [];
-      // 腾讯前复权字段顺序: [date,open,close,low,high,volume]
-      const kl = arr.map(x=>({ date:x[0], open:+x[1], high:+x[4], low:+x[3], close:+x[2], vol:+x[5] })).filter(x=>x.close>0);
-      fin(kl.length?kl:demoKline(code, period), kl.length===0);
+    const fQ = period==='w'?'qfqweek':'qfqday';   // 前复权字段
+    const fR = period==='w'?'week':'day';         // 原始（未复权）字段
+    const today = new Date().toISOString().slice(0,10);
+    // 腾讯 fqkline 单次最多返回约 640 根；日期区间参数有效，可用「滚动 end 日期」分段向前翻页
+    const SEG = 640, MAX_SEG = 3;   // 最多 3 段 ≈ 1900 根（日线约 7.5 年），够用且不拖慢加载
+    const rowsToKl = rows => rows.map(x=>({ date:x[0], open:+x[1], high:+x[4], low:+x[3], close:+x[2], vol:+x[5] }))
+                                 .filter(x=>x.close>0 && x.date);
+    const fetchSeg = (endDate) => {
+      const url='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+code+','+ptype+',1990-01-01,'+endDate+','+SEG+',qfq&_='+Date.now()+Math.random();
+      return fetch(url).then(r=>r.json()).then(j=>{
+        const d = (((j||{}).data||{})[code])||{};
+        // 关键：未发生过除权/分红的标的（多数ETF、全部指数）腾讯只返回 day/week，没有 qfqday/qfqweek。
+        // 旧版只认 qfq 字段 → 取空 → 回退演示假数据。此处必须回退到原始字段（无除权时两者等价）。
+        const rows = (d[fQ] && d[fQ].length) ? d[fQ] : (d[fR] || []);
+        return rowsToKl(rows);
+      });
+    };
+    const prevDay = ds => { const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()-1); return t.toISOString().slice(0,10); };
+    // 先拉最新一段 → 立即出图（不让用户等）；随后后台补拉更早历史，到齐后回调刷新
+    fetchSeg(today).then(first=>{
+      if(!first.length){ fin(demoKline(code, period), true); return; }
+      fin(first, false);                       // 首屏立即渲染
+      let all = first, guard = 0;
+      const more = () => {
+        if(guard++ >= MAX_SEG-1) { finishHistory(); return; }
+        fetchSeg(prevDay(all[0].date)).then(seg=>{
+          if(!seg.length){ finishHistory(); return; }
+          const cut = all[0].date;
+          const add = seg.filter(x=>x.date < cut);   // 去重，避免边界重复
+          if(!add.length){ finishHistory(); return; }
+          all = add.concat(all);
+          more();
+        }).catch(()=>finishHistory());
+      };
+      const finishHistory = () => {
+        if(all.length > first.length && typeof opt.onHistory === 'function') opt.onHistory(all);
+      };
+      more();
     }).catch(e=>{ console.error('loadKline tencent error', code, e); fin(demoKline(code, period), true); });
     return;
   }
@@ -2597,10 +2627,22 @@ function renderDetail(){
       data._demo = true;
       $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     } else {
-      $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
+      $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放 <span style="color:var(--sub)">（更早历史加载中…）</span>';
     }
     drawNow(data);
     if(state.view==='analysis') renderAnalysis();
+  }, {
+    // 后台补拉到的更早历史：合并进缓存并重绘，视口保持在最新一段不跳动
+    onHistory:(full)=>{
+      if(state.selected!==code || !full || !full.length) return;
+      const main=$('klineMain'); const oldN = (main&&main._kl)?main._kl.length:0;
+      state.kcache[key]=full;
+      // 视口右端锚定最新K线：新增的历史都在左侧，start 相应右移，用户看到的画面不变
+      if(main && main._vp){ const grew = full.length-oldN; if(grew>0) main._vp.start += grew; main._vp.n = full.length; }
+      try{ drawAll(full); }catch(e){ console.error('onHistory redraw', e); }
+      $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放 <span style="color:var(--sub)">（已加载 '+full.length+' 根，最早 '+full[0].date+'）</span>';
+      if(state.view==='analysis') renderAnalysis();
+    }
   });
 }
 function refreshKline(){
