@@ -849,7 +849,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07aa';  // aa=修复资金流向两处问题: ①右表"名称"列undefined: 原用ww.name/qq.name可能缺失,改统一走nameOf()兜底(CODE_NAMES/quotes.name/代码); ②东财主力净占比字段错位: f57主力净占比在返回数组p[6],原误读p[2](小单净流入),已修正。同时增强loadFundFlow错误码(nosecid/empty/parse/net/timeout)与重试按钮,失败提示更诚实。
+const APP_VER = '2026-08-07ab';  // ab=资金流向增强: ①主力净流入卡片加"数据时间"标注(东财返回时间戳格式化+腾讯内外盘行情时间兜底), 解决"不知道是哪天数据"; ②东财不可达时不再干巴巴"获取失败", 自动回退腾讯内外盘估算主动资金净额(沙箱/受限网络也能算, 基于真实成交, 诚实标注非券商主力)。loadFundFlow新增time字段透传。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -2255,7 +2255,7 @@ function loadFundFlow(code, cb){
       const p=kl[0].split(',');
       const main=parseFloat(p[1]);          // f52 主力净流入(元)
       const mainPct=parseFloat(p[6]);      // f57 主力净占比(%)
-      cb({main, mainPct:isNaN(mainPct)?null:mainPct, raw:p});
+      cb({main, mainPct:isNaN(mainPct)?null:mainPct, time:p[0], raw:p});
     }catch(e){ cb({err:'parse'}); }
   };
   const s=document.createElement('script');
@@ -2295,19 +2295,34 @@ function renderFlow(){
       '<div class="kv-row"><span>卖一~卖五委托</span><b class="down">'+fmt(askVol)+'</b></div>';
   }
   // —— 东方财富 真实主力净流入（异步）——
-  selEl.innerHTML += '<div class="sub-h2">💰 主力资金净流入（东方财富·实时）</div><div id="flowMainCard" class="flow-big">获取中…</div><div class="meta" style="font-size:11px;color:#888">数据来源：东方财富公开行情接口（主力净流入 = 超大单 + 大单净买入）</div>';
+  selEl.innerHTML += '<div class="sub-h2">💰 主力资金净流入（东方财富·实时）</div><div id="flowMainCard" class="flow-big">获取中…</div><div class="meta" id="flowMainTime" style="font-size:11px;color:#888">数据来源：东方财富公开行情接口（主力净流入 = 超大单 + 大单净买入）</div>';
+  const fmtTs = s => { if(!s) return ''; const m=(''+s).match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/); return m? (m[1]+'-'+m[2]+'-'+m[3]+' '+m[4]+':'+m[5]+':'+m[6]) : (''+s); };
   if(sel && !sel.startsWith('us')){
     loadFundFlow(sel, function(ff){
       const card=$('flowMainCard'); if(!card) return;
+      const timeEl=$('flowMainTime');
       if(ff && !isNaN(ff.main)){
         const mc=ff.main>0?'up':(ff.main<0?'down':'flat');
         const sign=ff.main>=0?'+':'';
         const pctTxt=(ff.mainPct!=null)?(' · 占成交额约 '+(ff.mainPct>0?'+':'')+ff.mainPct.toFixed(2)+'%'):'';
         card.innerHTML='<span class="'+mc+'">'+sign+fmtMoney(ff.main)+'</span><div class="meta">今日主力净流入 '+(mc==='up'?'资金流入':(mc==='down'?'资金流出':'均衡'))+pctTxt+'</div>';
+        if(timeEl) timeEl.textContent='🕒 数据时间：'+(fmtTs(ff.time)||'当日累计');
         return;
       }
-      const errMsg = ff && ff.err==='nosecid' ? '当前代码不支持主力资金流' : (ff && ff.err==='timeout' ? '请求超时' : '东方财富接口暂不可达（需联网）');
-      card.innerHTML='<span class="down">获取失败</span><div class="meta">'+errMsg+'，上方腾讯内外盘数据仍有效。如遇企业网络/沙箱限制，请在普通浏览器打开。</div><button class="ghost" style="margin-top:6px;font-size:12px;padding:4px 10px;" onclick="renderFlow()">↻ 重试</button>';
+      // 东财不可达 → 回退腾讯内外盘主动买卖净差额（手，沙箱/受限网络也能算，基于真实成交，口径≠券商主力）
+      const qq=state.quotes[sel];
+      if(qq && (qq.outer||qq.inner)){
+        const o=qq.outer||0, i=qq.inner||0, volNet=o-i;   // 净差额(手)：正=主动买入多，负=主动卖出多
+        const mc=volNet>0?'up':(volNet<0?'down':'flat');
+        const sign=volNet>=0?'+':'';
+        const absNet=Math.abs(volNet);
+        card.innerHTML='<span class="'+mc+'">'+sign+fmt(absNet)+' 手</span><div class="meta">主动'+(mc==='up'?'买入':'卖出')+'净多（内外盘估算，非券商主力净流入）</div>';
+        const tTxt=fmtTs(qq.time)||'实时';
+        if(timeEl) timeEl.textContent='⚠ 东方财富暂不可达，以下为 '+tTxt+' 腾讯内外盘主动买卖净差额估算';
+        return;
+      }
+      const errMsg = ff && ff.err==='nosecid' ? '当前代码不支持主力资金流' : (ff && ff.err==='timeout' ? '请求超时' : '东方财富接口暂不可达');
+      card.innerHTML='<span class="down">获取失败</span><div class="meta">'+errMsg+'，上方腾讯内外盘数据仍有效。如遇企业网络/沙箱限制，请在普通浏览器打开 GitHub Pages 链接。</div><button class="ghost" style="margin-top:6px;font-size:12px;padding:4px 10px;" onclick="renderFlow()">↻ 重试</button>';
     });
   } else {
     const card=$('flowMainCard'); if(card) card.innerHTML='<span class="flat">美股无主力资金流数据</span>';
