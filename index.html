@@ -415,7 +415,7 @@
 <body>
 <header>
   <h1>📊 我的投资工作台</h1>
-  <span class="src">数据来源：腾讯行情 + 新浪K线 + 东方财富基金（免费实时，无需注册）</span>
+  <span class="src">数据来源：腾讯行情 + 腾讯前复权K线(A股/ETF) + 新浪K线(港美股) + 东方财富基金（免费实时，无需注册）</span>
   <div class="status">
     <span class="pill ds" id="dataStatus" title="实时数据连接状态">数据：检测中</span>
     <span class="pill" id="updTime">未刷新</span>
@@ -801,7 +801,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06p';   // p=加持仓防错(P1): 顶部"加自选"同时建持仓占位行(数量/成本0)根治"加了不显示"; 持仓表数量/成本价改为可内联编辑(填即出市值盈亏); 按钮更名"加自选"。K线范围按钮+滚轮缩放+拖动实测确认已存在无需再造。
+const APP_VER = '2026-08-06q';   // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -1168,25 +1168,41 @@ function onQuotesUpdated(){ renderWatch();
   else renderHold();
   if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); }
 
-/* ============ K线：新浪 jsonp_v2 ============ */
+/* ============ K线：A股/ETF 腾讯前复权; 港/美 新浪 JSONP ============ */
 function loadKline(code, period, cb, opt){
   opt = opt || {};
-  const sym = sinaSymbol(code);
-  const scale = period==='w'?1200:240;
   const reqKey = code+'-'+period;           // 当前请求身份
   if(!opt.ignoreReqKey) state._klineReqKey = reqKey; // 只认最后一次请求（并行批量拉取时忽略该守卫，否则其余请求会被提前 return 永不回调）
-  const name = 'kcb'+Math.random().toString(36).slice(2)+Date.now();
   let done=false;
   const fin=(v, isDemo=false)=>{
     if(done)return; done=true;
     clearTimeout(tm);
-    if(s && s.parentNode) s.parentNode.removeChild(s);
-    try{ delete window[name]; }catch(_){}  // 全局 var 声明属性 configurable:false，delete 可能抛错，必须吞掉，否则 cb 永不执行
     // 如果用户已经切到别的代码/周期，丢弃这次回调，避免旧数据覆盖新图；ignoreReqKey 时无论如何都要回调（批量扫描并行请求互不干扰）
     if(!opt.ignoreReqKey && state._klineReqKey !== reqKey) return;
     cb(v, isDemo);
   };
   const tm=setTimeout(()=>fin(demoKline(code, period), true), 8000); // 8秒未返回 → 演示数据
+
+  // A股/ETF 用腾讯前复权，消除除权/拆分/分红导致的BOLL/MA/MACD椭圆失真
+  if(/^sh|^sz/i.test(code)){
+    const ptype = period==='w'?'week':'day';
+    const field = period==='w'?'qfqweek':'qfqday';
+    const end = new Date().toISOString().slice(0,10);
+    // 腾讯该接口 count>2000 会 param error，且返回最近 N 根（start 实际被忽略）
+    const url='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+code+','+ptype+',2010-01-01,'+end+',2000,qfq&_='+Date.now();
+    fetch(url).then(r=>r.json()).then(j=>{
+      const arr = ((((j||{}).data||{})[code])||{})[field] || [];
+      // 腾讯前复权字段顺序: [date,open,close,low,high,volume]
+      const kl = arr.map(x=>({ date:x[0], open:+x[1], high:+x[4], low:+x[3], close:+x[2], vol:+x[5] })).filter(x=>x.close>0);
+      fin(kl.length?kl:demoKline(code, period), kl.length===0);
+    }).catch(e=>{ console.error('loadKline tencent error', code, e); fin(demoKline(code, period), true); });
+    return;
+  }
+
+  // 港股/美股仍走新浪JSONP
+  const sym = sinaSymbol(code);
+  const scale = period==='w'?1200:240;
+  const name = 'kcb'+Math.random().toString(36).slice(2)+Date.now();
   const s=document.createElement('script');
   s.onload=function(){
     const arr = window[name];
@@ -1196,7 +1212,6 @@ function loadKline(code, period, cb, opt){
     }catch(e){ console.error('loadKline parse error', code, e); fin(demoKline(code, period), true); }
   };
   s.onerror=function(e){ console.error('loadKline network error', code, e); fin(demoKline(code, period), true); };
-  // 加时间戳防浏览器/代理缓存空响应或过期数据
   s.src='https://money.finance.sina.com.cn/quotes_service/api/jsonp_v2.php/var%20'+name+'=/CN_MarketData.getKLineData?symbol='+sym+'&scale='+scale+'&ma=5&datalen=5000&_='+Date.now();
   document.body.appendChild(s);
 }
@@ -2348,10 +2363,10 @@ async function renderSectors(){
     const txt=new TextDecoder('gb18030').decode(buf);
     quotes=parseTencent(txt);
   }catch(e){ console.warn('sector quotes failed', e); }
-  // 相对大盘强度基准：沪深300 日K线（新浪，零Key）
+  // 相对大盘强度基准：沪深300 日K线（腾讯前复权，零Key）
   let bench60=null;
   try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){ console.warn('bench failed', e); }
-  // 每只 ETF 拉日K线算 5/20/60 日涨幅 + 量价配合（新浪 JSONP，零Key）
+  // 每只 ETF 拉日K线算 5/20/60 日涨幅 + 量价配合（腾讯前复权，零Key）
   const rows=await Promise.all(POOL.map(async x=>{
     const kl=await loadKlineP(x.code,'d');
     const q=quotes[normCode(x.code)]||{};
@@ -2447,7 +2462,7 @@ async function renderRotation(){
     const txt=new TextDecoder('gb18030').decode(buf);
     quotes=parseTencent(txt);
   }catch(e){ console.warn('rotation quotes failed', e); }
-  // 相对大盘强度基准：沪深300 日K线（新浪，零Key）
+  // 相对大盘强度基准：沪深300 日K线（腾讯前复权，零Key）
   let bench60=null;
   try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){ console.warn('bench failed', e); }
   // 每只 ETF 拉日K线算 5/20/60 日涨幅 + 年化波动
@@ -2543,17 +2558,17 @@ function renderDetail(){
   // 立即绘制（不依赖 requestAnimationFrame，避免某些浏览器/环境下回调不触发导致空白）
   const drawNow=(data)=>{ try{ state.kcache[key]=data; chartStat('图表：K线已加载，绘制中…', null); drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
   if(kl && kl.length){
-    if(kl._demo) $('dHint').innerHTML='当前为演示K线（新浪接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
+    if(kl._demo) $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     else $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
     drawNow(kl); return;
   }
-  $('dHint').innerHTML='K线加载中… <span style="color:var(--sub)">（新浪接口，约1-3秒）</span>';
+  $('dHint').innerHTML='K线加载中… <span style="color:var(--sub)">（腾讯前复权，约1-3秒）</span>';
   chartStat('图表：正在拉取K线数据（'+APP_VER+'）', null);
   loadKline(code, state.period, (data, isDemo)=>{
     if(!data||!data.length){ $('dHint').innerHTML='K线获取失败（该代码可能无数据或接口限流） <a href="#" onclick="refreshKline();return false;">点我重试</a>'; chartStat('图表：K线获取失败（无数据/接口限流）', 'err'); return; }
     if(isDemo){
       data._demo = true;
-      $('dHint').innerHTML='当前为演示K线（新浪接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
+      $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     } else {
       $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
     }
