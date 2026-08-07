@@ -801,7 +801,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07t';   // t=修复06q起潜伏的高危bug: 腾讯fqkline真实字段顺序为[date,open,close,HIGH,LOW,vol](high在low前), 旧代码误读为high=x[4]/low=x[3]导致high/low对调→全样本high<low非法棒; 直接污染KDJ(RSV分母分子错乱, J出现±40000极值)且K线影线反向绘制。现修正为high=x[3]/low=x[4]; BOLL/MACD/RSI/MA只用close不受影响。
+const APP_VER = '2026-08-07u';   // u=季度轮动模块增强: 震荡市况(regime=flat)原本整页空白, 现补一个"市场温度"纯描述卡片(沪深300近60日涨跌+当前价位近1年分位+距牛熊阈值pp), 仅描述现状、不预测不给方向、不构成建议; 数据失败(unknown)明确提示而非假装震荡。诚实数据才加、不可靠误导的不加。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -2520,8 +2520,8 @@ async function renderRotation(){
     quotes=parseTencent(txt);
   }catch(e){ console.warn('rotation quotes failed', e); }
   // 相对大盘强度基准：沪深300 日K线（腾讯前复权，零Key）
-  let bench60=null;
-  try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){ console.warn('bench failed', e); }
+  let bench60=null, bk=null;
+  try{ bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){ console.warn('bench failed', e); }
   // 每只 ETF 拉日K线算 5/20/60 日涨幅 + 年化波动
   const rows=await Promise.all(POOL.map(async x=>{
     const kl=await loadKlineP(x.code,'d');
@@ -2533,6 +2533,19 @@ async function renderRotation(){
              regime:(bench60==null)?'unknown':(bench60>5?'bull':(bench60<-5?'bear':'flat')) };
   }));
   const regime=(bench60==null)?'unknown':(bench60>5?'bull':(bench60<-5?'bear':'flat'));
+  // 震荡市况补充：诚实的「市场温度」纯描述（仅描述当前状态，不预测、不给方向、不构成建议）
+  let tempHtml='';
+  if(regime==='flat' && bk && bk.length>=2){
+    const c250=bk.slice(-250).map(x=>x.close);
+    const lo=Math.min(...c250), hi=Math.max(...c250), cur=c250[c250.length-1];
+    const pos = hi>lo ? (cur-lo)/(hi-lo)*100 : 50;
+    const toBear=(bench60+5).toFixed(1), toBull=(5-bench60).toFixed(1);
+    tempHtml='<div class="rot-note" style="margin-top:12px;border-left:3px solid var(--flat);">'
+      +'<b>📊 市场温度（纯描述 · 非预测 · 不构成建议）</b><br>'
+      +'· 沪深300 近60日：<b class="'+(bench60<0?'down':'up')+'">'+(bench60>=0?'+':'')+bench60.toFixed(2)+'%</b> · 卡在震荡区（距熊市阈值 −5% 还差 '+toBear+'pp，距牛市 +5% 还差 '+toBull+'pp）<br>'
+      +'· 当前点位在近1年价格区间的 <b>'+pos.toFixed(0)+'%</b> 位置（越低=相对越便宜，越高=相对越贵）<br>'
+      +'<span style="color:var(--sub);">中线动量微弱、样本外不稳定，本模块<b>不筛具体行业方向</b>。以上仅为价格位置描述，请结合自身风险判断。</span></div>';
+  }
   // —— 分市况应用已验证规律：取该类前 25% 为候选 ——
   let cand=[], ruleTxt='', ruleSub='';
   if(regime==='bull'){
@@ -2574,8 +2587,10 @@ async function renderRotation(){
     candHtml='<div class="rot-cands"><div class="rot-h"><span class="regime-badge '+(regime==='bull'?'bull':'bear')+'">'+(regime==='bull'?'🛡 低波动优选':'↩ 超跌反弹候选')+'</span>当前市况下历史占优方向（前 25%）</div>'
       +'<table class="sectors">'+head+'<tbody>'+body+'</tbody></table>'
       +'<div class="rot-note">以上按「'+(regime==='bull'?'年化波动最低':'60日最弱')+'」排序取前 25%，是<b>季度观察方向</b>而非即时买卖点。点行可加自选、到行情看板查看详情。</div></div>';
-  } else {
-    candHtml='<div class="empty" style="margin-top:12px;">当前市况（震荡）无可靠候选方向，本页不筛选，建议观望。</div>';
+  } else if(regime==='unknown'){
+    candHtml='<div class="empty" style="margin-top:12px;">⚠ 沪深300 行情未加载成功，无法判定市况，本页暂不筛选。</div>';
+  } else { // flat 震荡：不筛候选，但补诚实的温度描述（不预测、不给方向）
+    candHtml='<div class="empty" style="margin-top:12px;">当前市况（震荡）无可靠候选方向，本页不筛选，建议观望。</div>'+tempHtml;
   }
   $('rotationBanner').innerHTML=banner+sub;
   box.innerHTML=candHtml;
