@@ -801,7 +801,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07u';   // u=季度轮动模块增强: 震荡市况(regime=flat)原本整页空白, 现补一个"市场温度"纯描述卡片(沪深300近60日涨跌+当前价位近1年分位+距牛熊阈值pp), 仅描述现状、不预测不给方向、不构成建议; 数据失败(unknown)明确提示而非假装震荡。诚实数据才加、不可靠误导的不加。
+const APP_VER = '2026-08-07v';   // v=修复行情看板美股残缺: 腾讯对美股/海外指数仅返回简化格式(现价+涨跌%, 10字段), 旧版renderDetailHead/renderQuoteBoard对美股显示今开/昨收/最高/最低全0、五档盘口空白(难看且易误读)。现parseTencent简化分支加limited标记, 详情头与盘口对limited标的改为诚实提示"美股实时行情有限, 仅现价+涨跌%", 不编造数据。A股/港股/ETF/指数解析实测全链路自洽(06t修复无复发), 不受影响。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -978,7 +978,7 @@ function parseTencent(text){
     if(f.length<35){
       // 美股/海外指数简化格式: f[3]=现价 f[4]=涨跌额(点) f[5]=涨跌幅%
       if(f.length>=6){
-        out[code]={code,name:f[1]||code,price:parseFloat(f[3])||0,prevClose:0,open:0,time:'',change:parseFloat(f[4])||0,changePct:parseFloat(f[5])||0,high:0,low:0,volume:0,amount:0,turnover:0,pe:0,amplitude:0,mktCap:0,pb:0,limitUp:0,limitDown:0,ask:[],bid:[]};
+        out[code]={code,name:f[1]||code,price:parseFloat(f[3])||0,prevClose:0,open:0,time:'',change:parseFloat(f[4])||0,changePct:parseFloat(f[5])||0,high:0,low:0,volume:0,amount:0,turnover:0,pe:0,amplitude:0,mktCap:0,pb:0,limitUp:0,limitDown:0,ask:[],bid:[],limited:true};
       }
       continue;
     }
@@ -1059,6 +1059,12 @@ function renderQuoteBoard(){
     if(board){ board.style.display='grid'; }
     const lt=$('depthTable'); if(lt) lt.innerHTML='<tr><td colspan="3" class="qloading">实时行情加载中…（若长时间不出现，说明网络取不到该股票实时数据，已临时用演示数据）</td></tr>';
     const fi=$('fundInfo'); if(fi) fi.innerHTML='<div class="kv"><span class="k">状态</span><span class="v">等待行情…</span></div>';
+    return;
+  }
+  if(q.limited){   // 美股/海外指数：腾讯仅返回简化格式(现价+涨跌%)，无五档/开收高低 → 如实提示，不显示全0
+    board.style.display='block';
+    const lt=$('depthTable'); if(lt) lt.innerHTML='<tr><td colspan="3" class="qloading">美股实时行情有限：腾讯接口仅提供<b>现价</b>与<b>涨跌%</b>，无五档盘口 / 今开昨收最高最低。已如实显示，不编造数据。</td></tr>';
+    const fi2=$('fundInfo'); if(fi2) fi2.innerHTML='<div class="kv"><span class="k">说明</span><span class="v">美股行情仅现价 + 涨跌%</span></div>';
     return;
   }
   board.style.display='grid';
@@ -2612,9 +2618,14 @@ function renderDetailHead(){
   $('dName').textContent=q?q.name:code;
   $('dPrice').textContent=q?fmt(q.price):'--';
   const cEl=$('dChg'); if(q){ cEl.textContent=pct(q.changePct)+' ('+fmt(q.change)+')'; cEl.className=cls(q.change); } else {cEl.textContent='--';cEl.className='flat';}
-  $('dMeta').textContent='股票/ETF · 实时';
+  $('dMeta').textContent=(q&&q.limited)?'美股 · 实时(有限)':'股票/ETF · 实时';
   $('dTime').textContent=q&&q.time? ('时间 '+q.time.replace(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/,'$1-$2-$3 $4:$5:$6')) : '';
-  const sub=$('dSub'); if(sub) sub.innerHTML = q ? ('今开 <b>'+fmt(q.open)+'</b>　昨收 <b>'+fmt(q.prevClose)+'</b>　最高 <b>'+fmt(q.high)+'</b>　最低 <b>'+fmt(q.low)+'</b>') : '';
+  const sub=$('dSub');
+  if(sub){
+    if(q&&q.limited) sub.innerHTML='美股实时行情有限：仅提供现价与涨跌%';
+    else if(q) sub.innerHTML='今开 <b>'+fmt(q.open)+'</b>　昨收 <b>'+fmt(q.prevClose)+'</b>　最高 <b>'+fmt(q.high)+'</b>　最低 <b>'+fmt(q.low)+'</b>';
+    else sub.innerHTML='';
+  }
   renderQuoteBoard();
 }
 function renderDetail(){
