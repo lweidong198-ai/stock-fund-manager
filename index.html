@@ -493,6 +493,11 @@
             <button class="ghost" id="btnClear">清空自选</button>
           </div>
           <div class="explain">📗 <b>红涨绿跌</b>：<span class="up">红=今天涨</span>、<span class="down">绿=跌</span>（A股习惯）。点任意一行，右侧显示它的走势图。</div>
+          <div class="watch-filter" id="watchFilter" style="display:flex;gap:6px;margin:8px 0;">
+            <span class="tg on" data-f="all">全部</span>
+            <span class="tg" data-f="stock">股票/ETF</span>
+            <span class="tg" data-f="fund">场外基金</span>
+          </div>
           <div id="watchBox" style="overflow:auto;"></div>
         </div>
       </div>
@@ -801,7 +806,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07v';   // v=修复行情看板美股残缺: 腾讯对美股/海外指数仅返回简化格式(现价+涨跌%, 10字段), 旧版renderDetailHead/renderQuoteBoard对美股显示今开/昨收/最高/最低全0、五档盘口空白(难看且易误读)。现parseTencent简化分支加limited标记, 详情头与盘口对limited标的改为诚实提示"美股实时行情有限, 仅现价+涨跌%", 不编造数据。A股/港股/ETF/指数解析实测全链路自洽(06t修复无复发), 不受影响。
+const APP_VER = '2026-08-07w';   // w=行情看板自选列表加"全部/股票ETF/场外基金"三态区分切换按钮(混排股票基金时方便分开看); 默认全部; 切换即按kind筛选renderWatch; 各分类为空时提示"该分类下暂无自选"。之前06v修美股残缺+交互排查PASS。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -2768,8 +2773,11 @@ function showFundDetail(code){
 function renderWatch(){
   const box=$('watchBox');
   if(!state.watch.length){ box.innerHTML='<div class="empty">还没有自选，点「载入示例」或输入代码添加</div>'; return; }
+  const wf = state.watchFilter||'all';
+  const list = state.watch.filter(w => wf==='all' || (wf==='stock'&&w.kind!=='fund') || (wf==='fund'&&w.kind==='fund'));
+  if(!list.length){ box.innerHTML='<div class="empty">「'+(wf==='stock'?'股票/ETF':'场外基金')+'」分类下暂无自选</div>'; return; }
   let html='<table class="wl-table"><thead><tr><th>名称 / 代码</th><th>现价</th><th>涨跌%</th></tr></thead><tbody>';
-  state.watch.forEach(w=>{
+  list.forEach(w=>{
     const code=w.code; let name=code, price='--', cp=null, isFund=w.kind==='fund';
     if(isFund){ const fd=state.fundData[code]; name=fd?fd.name:(CODE_NAMES[code]||code); price=fd?fmt(fd.latest,4):'--'; if(fd&&fd.prev)cp=(fd.latest-fd.prev)/fd.prev*100; }
     else { const q=state.quotes[code]; if(q){name=q.name;price=fmt(q.price);cp=q.changePct;} }
@@ -3225,6 +3233,12 @@ document.querySelectorAll('[data-group="faHeat"] .tg').forEach(t=>t.onclick=()=>
   const cv=$('faHeatCanvas'); if(!cv||!cv._A) return;
   cv._heatYears=parseInt(t.dataset.years,10);
   if(cv._redraw) cv._redraw();
+});
+document.querySelectorAll('#watchFilter .tg').forEach(t=>t.onclick=()=>{
+  state.watchFilter=t.dataset.f;
+  document.querySelectorAll('#watchFilter .tg').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');
+  renderWatch();
 });
 document.querySelectorAll('.navitem').forEach(t=>t.onclick=()=>goView(t.dataset.view));
 
