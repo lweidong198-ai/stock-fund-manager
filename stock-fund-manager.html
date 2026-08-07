@@ -801,7 +801,9 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06q';   // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
+const APP_VER = '2026-08-07r';   // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
+// q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
+const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -1890,7 +1892,7 @@ function drawMain(kl){
     if(!kl||!kl.length){ ctx.fillStyle=FLAT; ctx.font='13px sans-serif'; ctx.fillText('暂无数据',12,20); return; }
     ensureVP(cv,kl.length);
     const vp=cv._vp; const start=vp.start, count=vp.count; const sub=kl.slice(start,start+count);
-    const padR=58, padL=8, volH=78, gap=8, cw=w-padR;
+    const padR=CHART_PADR, padL=CHART_PADL, volH=78, gap=8, cw=w-padR;
     const priceH=h-volH-gap-18;
     // 成交量区域分隔线
     const volTop=h-volH-gap+4;
@@ -1959,10 +1961,10 @@ function drawMain(kl){
       }
     }
     ctx.textAlign='left';
-    // 悬停十字线
+    // 悬停十字线（竖线贯穿到画布底部，与下方 MACD/KDJ/RSI 副图连成一条）
     if(cv._hover!=null){ const i=cv._hover-start; if(i>=0&&i<n){ const k=sub[i], x=X(i), col=k.close>=k.open?UP:DOWN;
       ctx.save(); ctx.strokeStyle='#94a3b8'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h-14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(padL,Y(k.close)); ctx.lineTo(cw,Y(k.close)); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x,Y(k.close),3.5,0,Math.PI*2); ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle='#fff'; ctx.stroke();
       ctx.restore();
@@ -1990,10 +1992,15 @@ function drawLinePane(cvId, series, opts){
     subSeries.forEach(s=>s.data.forEach(v=>{ if(v!=null){ if(v<lo)lo=v; if(v>hi)hi=v; }}));
     if(opts.guides){ opts.guides.forEach(g=>{ if(g<lo)lo=g; if(g>hi)hi=g; }); }
     const pad=(hi-lo)*0.1||1; lo-=pad; hi+=pad;
-    const padR=46,cw=w-padR; const X=i=> (i+0.5)*(cw/n); const Y=v=> h-8-(v-lo)/(hi-lo)*(h-16);
+    // 坐标系与主图 drawMain 完全一致（padL/padR 相同），确保十字线跨图严格对齐
+    const padR=CHART_PADR, padL=CHART_PADL, cw=w-padR; const X=i=> padL+(i+0.5)*(cw/n); const Y=v=> h-8-(v-lo)/(hi-lo)*(h-16);
+    // 当前光标索引（全局索引）：优先用主图传来的 crossIdx，其次用自身 _hover
+    const _ci = (opts.crossIdx!=null) ? opts.crossIdx : cv._hover;
+    const _on = (_ci!=null && _ci>=start && _ci<start+count);
+    const _ix = _on ? (_ci-start) : -1;
     ctx.strokeStyle='#e3e8ef'; ctx.fillStyle=FLAT; ctx.font='10px sans-serif';
-    for(let g=0;g<=2;g++){ const v=lo+(hi-lo)*g/2; const y=Y(v); ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke(); ctx.fillText(fmt(v,1),cw+4,y+3); }
-    if(opts.guides){ opts.guides.forEach(g=>{ const y=Y(g); ctx.strokeStyle='#c7cfdb'; ctx.setLineDash([2,2]); ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle=FLAT; ctx.fillText(String(g),cw+4,y+3); }); }
+    for(let g=0;g<=2;g++){ const v=lo+(hi-lo)*g/2; const y=Y(v); ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(cw,y);ctx.stroke(); ctx.fillText(fmt(v,1),cw+4,y+3); }
+    if(opts.guides){ opts.guides.forEach(g=>{ const y=Y(g); ctx.strokeStyle='#c7cfdb'; ctx.setLineDash([2,2]); ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(cw,y);ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle=FLAT; ctx.fillText(String(g),cw+4,y+3); }); }
     subSeries.forEach(s=>{
       if(s.type==='bar'){ const bw=Math.max(1.5,cw/n*0.5);
         for(let i=0;i<n;i++){ const v=s.data[i]; if(v==null)continue; const x=X(i); const y0=Y(0), y=Y(v);
@@ -2001,9 +2008,29 @@ function drawLinePane(cvId, series, opts){
       }else{ ctx.strokeStyle=s.color; ctx.lineWidth=1.3; ctx.beginPath(); let st=false;
         for(let i=0;i<n;i++){ const v=s.data[i]; if(v==null){st=false;continue;} const x=X(i),y=Y(v); if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);} ctx.stroke(); }
     });
-    if(opts.legend){ ctx.font='10px sans-serif'; let lx=4; opts.legend.forEach(l=>{ ctx.fillStyle=l.color; ctx.fillText(l.label, lx, 12); lx+=l.label.length*7+10; }); }
-    if(cv._hover!=null && opts.hoverDates && cv._hover>=start && cv._hover<start+count){ const idx=cv._hover-start; const x=X(idx), y=Y(subSeries[0].data[idx]); ctx.save(); ctx.strokeStyle='#94a3b8'; ctx.setLineDash([3,3]); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h-14); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle=subSeries[0].color||'#2563eb'; ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle='#fff'; ctx.stroke(); ctx.restore(); drawTooltip(ctx,x,y,[new Date(opts.hoverDates[cv._hover]).toLocaleDateString('zh-CN'),'收益 '+fmt(subSeries[0].data[idx],2)+'%']); }
-    cv._x=X; cv._y=Y; cv._cw=cw;
+    // 图例：光标悬停时追加当前值（专业看盘软件做法，数值跟着光标走）
+    if(opts.legend){ ctx.font='10px sans-serif'; ctx.textAlign='left'; let lx=padL;
+      opts.legend.forEach((l,li)=>{
+        let txt=l.label;
+        if(_on){ const s=subSeries[l.si!=null?l.si:li]; const v=s?s.data[_ix]:null; if(v!=null) txt=l.label+' '+fmt(v,2); }
+        ctx.fillStyle=l.color; ctx.fillText(txt, lx, 12); lx+=ctx.measureText(txt).width+10;
+      });
+    }
+    // 贯穿十字线：竖线从画布顶到底，与主图/其他副图连成一条；各条曲线在该位置点亮圆点
+    if(_on){
+      const x=X(_ix);
+      ctx.save(); ctx.strokeStyle='#94a3b8'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]);
+      subSeries.forEach(s=>{ if(s.type==='bar') return; const v=s.data[_ix]; if(v==null) return;
+        ctx.fillStyle=s.color||'#2563eb'; ctx.beginPath(); ctx.arc(x,Y(v),3,0,Math.PI*2); ctx.fill();
+        ctx.lineWidth=1.2; ctx.strokeStyle='#fff'; ctx.stroke(); });
+      ctx.restore();
+      // 基金滚动收益图等场景：保留原有气泡提示
+      if(opts.hoverDates && opts.hoverDates[_ci]!=null && subSeries[0].data[_ix]!=null){
+        drawTooltip(ctx,x,Y(subSeries[0].data[_ix]),[new Date(opts.hoverDates[_ci]).toLocaleDateString('zh-CN'),'收益 '+fmt(subSeries[0].data[_ix],2)+'%']);
+      }
+    }
+    cv._x=X; cv._y=Y; cv._cw=cw; cv._padLx=padL;
   }catch(e){
     ctx.fillStyle='#e01f22'; ctx.font='12px sans-serif'; ctx.textAlign='left';
     ctx.fillText('指标图绘制出错：', 10, 18);
@@ -2589,12 +2616,14 @@ function drawAll(kl){
     syncVP($('klineMain'),['paneMACD','paneKDJ','paneRSI'],kl.length);
     const closes=kl.map(x=>x.close), highs=kl.map(x=>x.high), lows=kl.map(x=>x.low);
     const m=macd(closes, state.macdParam), k=kdj(highs,lows,closes), r=rsi(closes,6), r2=rsi(closes,12), r3=rsi(closes,24);
+    // 主图光标索引 → 传给各副图，画出贯穿整组图表的同一条竖线
+    const _cx = $('klineMain')._hover;
     if(state.ind.macd) drawLinePane('paneMACD',[{data:m.dif,color:'#d99a00'},{data:m.dea,color:'#2b7de9'},{data:m.bar,type:'bar'}],
-      {guides:[],legend:[{label:'DIF',color:'#d99a00'},{label:'DEA',color:'#2b7de9'}]});
+      {guides:[],crossIdx:_cx,legend:[{label:'DIF',color:'#d99a00'},{label:'DEA',color:'#2b7de9'},{label:'柱',color:'#64748b',si:2}]});
     if(state.ind.kdj) drawLinePane('paneKDJ',[{data:k.k,color:'#d99a00'},{data:k.d,color:'#2b7de9'},{data:k.j,color:'#d651a8'}],
-      {guides:[80,20],legend:[{label:'K',color:'#d99a00'},{label:'D',color:'#2b7de9'},{label:'J',color:'#d651a8'}]});
+      {guides:[80,20],crossIdx:_cx,legend:[{label:'K',color:'#d99a00'},{label:'D',color:'#2b7de9'},{label:'J',color:'#d651a8'}]});
     if(state.ind.rsi) drawLinePane('paneRSI',[{data:r,color:'#d99a00'},{data:r2,color:'#2b7de9'},{data:r3,color:'#d651a8'}],
-      {guides:[70,30],legend:[{label:'RSI6',color:'#d99a00'},{label:'RSI12',color:'#2b7de9'},{label:'RSI24',color:'#d651a8'}]});
+      {guides:[70,30],crossIdx:_cx,legend:[{label:'RSI6',color:'#d99a00'},{label:'RSI12',color:'#2b7de9'},{label:'RSI24',color:'#d651a8'}]});
     $('dHint').textContent='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
     bindKlineInteractions();
     chartStat('图表：已绘制 '+kl.length+' 根K线（版本 '+APP_VER+'）', 'ok');
@@ -2605,19 +2634,36 @@ function drawAll(kl){
     paintCanvasError('klineMain', err);
   }
 }
+/* 由鼠标横坐标反解出K线全局索引（与 drawMain/drawLinePane 的 X() 公式一致，含 padL/padR） */
+function idxFromX(cv, clientX, n){
+  const vp=cv._vp; if(!vp||!n) return null;
+  const rect=cv.getBoundingClientRect();
+  const cssW=rect.width||cv.clientWidth||0; if(!cssW) return null;
+  const cw=cssW-CHART_PADR;
+  const per=cw/vp.count; if(!(per>0)) return null;
+  let i=vp.start+Math.floor((clientX-rect.left-CHART_PADL)/per);
+  return Math.max(0,Math.min(n-1,i));
+}
 function bindKlineInteractions(){
   const main=$('klineMain'); if(main._pzBound) return;
   bindPanZoom(main,()=>main._kl?main._kl.length:0,()=>{ if(main._kl) drawAll(main._kl); });
   main.addEventListener('mousemove',e=>{
     if(main._dragging){ main._hover=null; return; }
-    const n=main._kl?main._kl.length:0; if(!n||!main._vp) return;
-    const rect=main.getBoundingClientRect(); const x=e.clientX-rect.left;
-    const ppi=(rect.width||main.clientWidth)/main._vp.count;
-    let i=main._vp.start+Math.floor(x/ppi);
-    i=Math.max(0,Math.min(n-1,i));
+    const n=main._kl?main._kl.length:0; if(!n) return;
+    const i=idxFromX(main,e.clientX,n); if(i==null) return;
     if(main._hover!==i){ main._hover=i; drawAll(main._kl); }
   });
   main.addEventListener('mouseleave',()=>{ if(main._hover!=null){ main._hover=null; if(main._kl) drawAll(main._kl); } });
+  // 副图反向联动：光标在 MACD/KDJ/RSI 上移动时，主图与其余副图同步画同一条竖线
+  ['paneMACD','paneKDJ','paneRSI'].forEach(pid=>{
+    const p=$(pid); if(!p||p._xhBound) return; p._xhBound=1;
+    p.addEventListener('mousemove',e=>{
+      const n=main._kl?main._kl.length:0; if(!n) return;
+      const i=idxFromX(p,e.clientX,n); if(i==null) return;
+      if(main._hover!==i){ main._hover=i; drawAll(main._kl); }
+    });
+    p.addEventListener('mouseleave',()=>{ if(main._hover!=null){ main._hover=null; if(main._kl) drawAll(main._kl); } });
+  });
 }
 
 /* ============ 基金工作区 ============ */
@@ -3280,7 +3326,7 @@ function drawFaHover(cv,ctx,X,Y,cw,h,valueArr,textFn,color){ if(cv._hover==null)
 function bindFaHover(){ [['faNavCanvas'],['faGrowthCanvas'],['faDDCanvas'],['faRollCanvas']].forEach(([id],idx)=>{ const cv=$(id); if(cv._hb) return; cv._hb=1;
   if(id==='faNavCanvas') bindPanZoom(cv,()=>cv._A?cv._A.vals.length:0,()=>{ if(cv._redraw){ syncVP(cv,['faGrowthCanvas','faDDCanvas'],cv._A.vals.length); cv._redraw(); } });
   if(id==='faRollCanvas') bindPanZoom(cv,()=>cv._dataLen||(cv._A?cv._A.vals.length:0),()=>{ if(cv._redraw) cv._redraw(); });
-  cv.addEventListener('mousemove',e=>{ if(cv._dragging){ cv._hover=null; return; } const A=cv._A; if(!A||!cv._n) return; const rect=cv.getBoundingClientRect(); const x=e.clientX-rect.left; let i=Math.floor(x/(cv._cw/cv._n)); i=Math.max(0,Math.min(cv._n-1,i)); if(cv._hover!==i){ cv._hover=i; if(cv._redraw) cv._redraw(); } });
+  cv.addEventListener('mousemove',e=>{ if(cv._dragging){ cv._hover=null; return; } const A=cv._A; if(!A||!cv._n) return; const rect=cv.getBoundingClientRect(); const x=e.clientX-rect.left-(cv._padLx||0); let i=Math.floor(x/(cv._cw/cv._n)); i=Math.max(0,Math.min(cv._n-1,i)); if(cv._hover!==i){ cv._hover=i; if(cv._redraw) cv._redraw(); } });
   cv.addEventListener('mouseleave',()=>{ if(cv._hover!=null){ cv._hover=null; if(cv._redraw) cv._redraw(); } });
 }); const hc=$('faHeatCanvas'); if(!hc._hb){ hc._hb=1; hc.addEventListener('mousemove',e=>{ if(hc._dragging){ hc._hover=null; return; } const A=hc._A; if(!A||!A.monthly||!A.monthly.length) return; const mx=e.offsetX,my=e.offsetY; if(mx<hc._hx0||mx>hc._hx0+12*hc._hcellW||my<hc._hy0||my>hc._hy0+hc._hyears.length*hc._hcellH){ if(hc._hover){hc._hover=null;hc._redraw&&hc._redraw();} return; } const mo=Math.floor((mx-hc._hx0)/hc._hcellW)+1; const yi=Math.floor((my-hc._hy0)/hc._hcellH); if(yi<0||yi>=hc._hyears.length||mo<1||mo>12){ if(hc._hover){hc._hover=null;hc._redraw&&hc._redraw();} return; } const key=hc._hyears[yi]+'-'+String(mo).padStart(2,'0'); const has=hc._hmap[hc._hyears[yi]]&&hc._hmap[hc._hyears[yi]].some(x=>x.key===key); if(!has){ if(hc._hover){hc._hover=null;hc._redraw&&hc._redraw();} return; } if(!hc._hover||hc._hover[0]!==yi||hc._hover[1]!==mo){ hc._hover=[yi,mo]; hc._redraw&&hc._redraw(); } }); hc.addEventListener('mouseleave',()=>{ if(hc._hover){hc._hover=null;hc._redraw&&hc._redraw();} }); } }
 
