@@ -385,6 +385,11 @@
   #faInputRow .add-input{min-width:200px;}
   #viewFundAnalysis canvas{height:150px;display:block;}
   #viewFundAnalysis #faDDCanvas,#viewFundAnalysis #faRollCanvas{height:140px;}
+  /* 存储可见化：保存提示 + 浏览器禁存储警告 */
+  #toast{position:fixed;right:16px;bottom:16px;background:rgba(22,28,38,.94);color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.25);}
+  #toast.show{opacity:1;transform:translateY(0);}
+  #storageWarn{position:fixed;left:0;right:0;top:0;background:#c0392b;color:#fff;text-align:center;padding:8px 12px;font-size:13px;z-index:9998;display:none;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+  #storageWarn b{text-decoration:underline;cursor:pointer;}
 </style>
 <script>
 (function(){
@@ -572,7 +577,7 @@
           <input id="fileImport" type="file" accept="application/json" style="display:none;" />
         </div>
         <div class="summary" id="holdSummary"></div>
-        <div class="explain">📘 <b>怎么读</b>：市值 = 现在这些持仓总共值多少钱；浮动盈亏 = 按现价卖出能赚/亏多少；<b>收益率</b> = (现价−成本价)÷成本价，正数是赚、负数是亏。<b>输入代码自动识别股票/基金</b>，填数量和买入成本价，点「加持仓」即可。<b>持仓与自选互相独立</b>——不必先加自选，删自选也不影响持仓。</div>
+        <div class="explain">📘 <b>怎么读</b>：市值 = 现在这些持仓总共值多少钱；浮动盈亏 = 按现价卖出能赚/亏多少；<b>收益率</b> = (现价−成本价)÷成本价，正数是赚、负数是亏。<b>输入代码自动识别股票/基金</b>，填数量和买入成本价，点「加持仓」即可。<b>持仓与自选互相独立</b>——不必先加自选，删自选也不影响持仓。<b style="color:#c0392b">提醒：数据只存在你当前这个浏览器网址里，换设备/清缓存/开无痕都会丢，建议偶尔点「导出备份」存个 json 文件。</b></div>
         <div id="holdBox"></div>
       </div>
     </div>
@@ -796,7 +801,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06n';   // n=根治「股票被误判成基金→现价/市值错算」: 新增isFundKind(存储kind优先, 仅kind缺失时回退代码启发式), priceOf/renderHold分组/selectCode/fundCodesToLoad/addHold/cleanseWatch 全改用isFundKind; 新增cleanseHold()在启动时把误存成股票的基金码(如sz012863)纠正回基金; 600519(贵州茅台)等正规股票不再被当基金取演示净值
+const APP_VER = '2026-08-06o';   // o=存储可见化: ①save() 包 try/catch, 浏览器禁存储(无痕/隐私/设置关闭)时弹顶部红色警告, 避免误以为已保存; ②加自选/加持仓/导入备份后右下角弹「✓已自动保存」toast; ③持仓区加「数据只存在当前浏览器网址、换设备/清缓存/无痕会丢、建议导出备份」提醒; 启动即探测本地存储可用性。根因: 用户"隔天数据没了"是入口不稳定(CloudStudio沙箱一次性+内置预览面板不跨会话), 非存储bug(已无头实测PERSIST_OK)。
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -874,9 +879,15 @@ function isFundKind(code){ const k=kindOf(code); if(k==='fund') return true; if(
 function fundCodesToLoad(){ const set=new Set(); [...(state.watch||[]),...(state.hold||[])].forEach(x=>{ if(x&&x.code&&isFundKind(x.code)) set.add(String(x.code).replace(/^(sz|sh|hk|us)/i,'')); }); return [...set]; }
 
 /* ============ 持久化 ============ */
+function toast(msg){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'),1900); }
+function showStorageWarn(){ const w=document.getElementById('storageWarn'); if(w) w.style.display='block'; }
+function hideStorageWarn(){ const w=document.getElementById('storageWarn'); if(w) w.style.display='none'; }
 function save(){
-  localStorage.setItem(LS_WATCH, JSON.stringify(state.watch));
-  localStorage.setItem(LS_HOLD, JSON.stringify(state.hold));
+  try{
+    localStorage.setItem(LS_WATCH, JSON.stringify(state.watch));
+    localStorage.setItem(LS_HOLD, JSON.stringify(state.hold));
+    hideStorageWarn();
+  }catch(e){ showStorageWarn(); }   // 无痕/隐私模式或浏览器禁存储 → 弹警告，避免误以为已保存
 }
 function load(){
   try{ state.watch = JSON.parse(localStorage.getItem(LS_WATCH)||'[]'); }catch(e){ state.watch=[]; }
@@ -2760,9 +2771,9 @@ function addWatch(raw){                          // 自动识别：输入代码�
   const btn=$('btnAdd'); if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
   detectKind(raw).then(r=>{
     if(btn){ btn.disabled=false; btn.textContent='添加'; }
-    if(state.watch.some(w=>w.code===r.code)){ selectCode(r.code); return; }
+    if(state.watch.some(w=>w.code===r.code)){ selectCode(r.code); toast('✓ 已自动保存'); return; }
     state.watch.push({code:r.code, kind:r.kind});
-    save();
+    save(); toast('✓ 已自动保存到本机浏览器');
     if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name, nav:[], latest:0, prev:0, cum:[]}; loadFund(r.code); }
     else refreshQuotes();
     renderWatch(); renderHoldSelect(); selectCode(r.code);
@@ -2833,7 +2844,7 @@ async function addHold(raw, shares, cost){
     if(ex){ ex.shares=shares; ex.cost=cost; }
     else state.hold.push({code:r.code, kind:r.kind, shares, cost});
     if(!state.watch.some(w=>w.code===r.code)){ state.watch.push({code:r.code, kind:r.kind}); } // 加持仓同步进自选：自选可见行情+持仓中角标
-    save();
+    save(); toast('✓ 已自动保存（持仓已记录）');
     if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); }
     else { await ensureStockQuote(r.code); }
     refreshQuotes();
@@ -2845,7 +2856,7 @@ $('btnAddHold').onclick=()=>{ const code=$('holdCode').value; const sh=parseFloa
 $('btnClearHold').onclick=()=>{ if(confirm('清空全部持仓？')){ state.hold=[]; save(); renderHold(); renderWatch(); } };
 $('btnExport').onclick=()=>{ const data={watch:state.watch, hold:state.hold, v:2, exported:new Date().toISOString()}; const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='我的自选持仓备份_'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(a.href); };
 $('btnImport').onclick=()=>$('fileImport').click();
-$('fileImport').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(Array.isArray(d.watch)) state.watch=d.watch; if(Array.isArray(d.hold)) state.hold=d.hold; save(); fundCodesToLoad().forEach(c=>loadFund(c)); refreshQuotes(); renderWatch(); renderHold(); renderHoldSelect(); alert('导入成功：'+state.watch.length+' 个自选、'+state.hold.length+' 笔持仓'); }catch(err){ alert('文件格式不对，导入失败'); } }; rd.readAsText(f); e.target.value=''; };
+$('fileImport').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(Array.isArray(d.watch)) state.watch=d.watch; if(Array.isArray(d.hold)) state.hold=d.hold; save(); toast('✓ 备份已导入并保存'); fundCodesToLoad().forEach(c=>loadFund(c)); refreshQuotes(); renderWatch(); renderHold(); renderHoldSelect(); alert('导入成功：'+state.watch.length+' 个自选、'+state.hold.length+' 笔持仓'); }catch(err){ alert('文件格式不对，导入失败'); } }; rd.readAsText(f); e.target.value=''; };
 $('btnRefresh').onclick=()=>{ refreshQuotes(); fundCodesToLoad().forEach(c=>loadFund(c, true)); };
 // MACD 参数预设下拉：切换档位 → 副图+速览卡按新参数计算，大师评级不变
 (function(){
@@ -3246,6 +3257,7 @@ $('btnFaStart').onclick=()=>{ const v=$('faInput').value.trim(); if(!/^\d{6}$/.t
 $('faPeriodSel').onchange=()=>{ state.faPeriod=parseInt($('faPeriodSel').value,10)||90; if(state.faCode) renderFundAnalysis(); };
 
 /* ============ 启动 ============ */
+(function(){ try{ localStorage.setItem('_sfm_t','1'); localStorage.removeItem('_sfm_t'); hideStorageWarn(); }catch(e){ showStorageWarn(); } })(); // 启动即探明本地存储是否可用
 load(); bindFaHover();
 refreshIndices();
 showView('home');
@@ -3296,5 +3308,7 @@ function showDiag(){
 <div id="diagPanel" onclick="if(event.target===this)this.style.display='none'">
   <div id="diagBox"><span id="diagClose" onclick="document.getElementById('diagPanel').style.display='none'">×</span><h3>页面诊断信息</h3><div id="diagContent"></div></div>
 </div>
+<div id="storageWarn">⚠️ 当前浏览器禁用了本地存储（可能是无痕/隐私模式或设置关闭），<b>数据无法自动保存</b>。请改用 Chrome/Edge 正常模式打开，或点「导出备份」手动留存。</div>
+<div id="toast"></div>
 </body>
 </html>
