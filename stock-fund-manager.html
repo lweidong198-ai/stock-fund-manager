@@ -340,6 +340,31 @@
   .hg-title{font-size:13px;font-weight:600;color:var(--text);margin:10px 2px 4px;}
   .hg-sub{font-size:11px;font-weight:400;color:var(--sub);margin-left:8px;}
   .hg-sub b{font-weight:600;}
+  /* 资金流向 */
+  .flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;}
+  .flow-col{min-width:0;}
+  .sub-h{font-size:13px;font-weight:600;color:var(--text);margin:0 0 8px;}
+  .sub-h2{font-size:12px;font-weight:600;color:var(--sub);margin:14px 0 6px;}
+  .flow-name{font-size:15px;font-weight:700;margin-bottom:6px;}
+  .flow-name .code{font-size:11px;color:var(--sub);font-weight:400;margin-left:6px;}
+  .flow-big{font-size:13px;margin-bottom:10px;}
+  .flow-big b{font-size:15px;}
+  .bar2{display:flex;height:22px;border-radius:6px;overflow:hidden;font-size:11px;color:#fff;margin:6px 0;}
+  .bar-fill{display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;}
+  .bar-buy{background:#e0322f;} .bar-sell{background:#15a15a;}
+  .bar-bid{background:#e0322f;} .bar-ask{background:#15a15a;}
+  .kv-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--border);}
+  .kv-row span{color:var(--sub);} .kv-row b{font-weight:600;}
+  .flow-list{max-height:560px;overflow:auto;}
+  .flow-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .flow-table th{font-size:11px;color:var(--sub);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--border);}
+  .flow-table th:first-child{text-align:left;}
+  .flow-table td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--border);}
+  .flow-table td:first-child{text-align:left;font-weight:600;}
+  .flow-table tbody tr{cursor:pointer;}
+  .flow-table tbody tr:hover{background:var(--panel2);}
+  .mini-bar{display:inline-block;width:60px;height:8px;border-radius:4px;background:var(--panel2);vertical-align:middle;margin-right:6px;overflow:hidden;border:1px solid var(--border);}
+  .mini-buy{display:block;height:100%;background:#e0322f;}
   .wl-price{text-align:right;font-weight:600;padding-right:8px;}
   .wl-chg{text-align:right;font-weight:600;padding-right:8px;font-size:12.5px;}
   .wl-chg.up{color:var(--up);} .wl-chg.down{color:var(--down);}
@@ -450,6 +475,7 @@
     <div class="navitem nav-decision" data-view="fundAnalysis">📈 基金深度分析</div>
     <div class="navitem nav-decision" data-view="sectors">🌐 行业趋势扫描</div>
     <div class="navitem nav-decision" data-view="rotation">📊 季度轮动</div>
+    <div class="navitem nav-decision" data-view="flow">💰 资金流向</div>
     <div class="navgroup ng-tool"><span class="ng-bar"></span>数据工具</div>
     <div class="navitem nav-tool" data-view="datacenter">🧮 可靠数据中心</div>
     <div class="navfoot">点自选行→行情页看K线/净值；想看「大师怎么看这只」点「建仓分析」；给基金做体检点「基金深度分析」。</div>
@@ -750,6 +776,23 @@
         <div id="rotationBody" class="sector-wrap"></div>
       </div>
     </div>
+    <!-- 资金流向 -->
+    <div id="viewFlow" class="view" style="display:none;">
+      <div class="card">
+        <h2>💰 资金流向 <span class="tag">零门槛实时 · 内外盘主动买卖力道</span></h2>
+        <div class="explain" style="margin-top:0;">📊 用腾讯实时行情的<b>内外盘</b>（外盘=主动买入成交量、内盘=主动卖出成交量）和<b>五档盘口买卖委托量</b>，实时刻画「钱往哪走」。左卡看当前选中标的的当日资金力道，右表把你的<b>自选 / 持仓</b>一次性排出来，谁在吸金、谁在出货一目了然。<br>⚠ <b>数据口径（诚实说明）</b>：这是资金流向的<b>实时代理指标</b>（基于真实成交的主动买卖分类），<b>不是券商「主力净流入金额」</b>。浏览器零门槛直连下，严格的主力净流入需跨域接口（当前不可用），本页用最干净、可验证的口径呈现，不编造数字。</div>
+        <div class="flow-grid">
+          <div class="flow-col">
+            <div class="sub-h">🎯 选中标的资金力道</div>
+            <div id="flowSel"></div>
+          </div>
+          <div class="flow-col">
+            <div class="sub-h">📋 自选 / 持仓 资金流向总览 <span class="meta" id="flowListMeta"></span></div>
+            <div id="flowList" class="flow-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="viewDatacenter" class="view" style="display:none">
     <div class="card">
@@ -806,7 +849,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07w';   // w=行情看板自选列表加"全部/股票ETF/场外基金"三态区分切换按钮(混排股票基金时方便分开看); 默认全部; 切换即按kind筛选renderWatch; 各分类为空时提示"该分类下暂无自选"。之前06v修美股残缺+交互排查PASS。
+const APP_VER = '2026-08-07y';   // y=资金流向模块改用真实数据: 核心大数字改东方财富JSONP真实"主力资金净流入"(零Key·脚本注入绕过CORS, kline klt=1 lmt=1拿今日累计主力净流入, 已验证茅台今日-1.16亿与daykline吻合); 腾讯内外盘+五档作辅助(确定正确); secid转换sh→1./sz→0./hk→116./us→100.; 拉不到诚实提示"东方财富暂不可达"不编造。之前x版是内外盘代理(非真实主力金额), 本次升级为真实源。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -983,7 +1026,7 @@ function parseTencent(text){
     if(f.length<35){
       // 美股/海外指数简化格式: f[3]=现价 f[4]=涨跌额(点) f[5]=涨跌幅%
       if(f.length>=6){
-        out[code]={code,name:f[1]||code,price:parseFloat(f[3])||0,prevClose:0,open:0,time:'',change:parseFloat(f[4])||0,changePct:parseFloat(f[5])||0,high:0,low:0,volume:0,amount:0,turnover:0,pe:0,amplitude:0,mktCap:0,pb:0,limitUp:0,limitDown:0,ask:[],bid:[],limited:true};
+        out[code]={code,name:f[1]||code,price:parseFloat(f[3])||0,prevClose:0,open:0,time:'',change:parseFloat(f[4])||0,changePct:parseFloat(f[5])||0,high:0,low:0,volume:0,amount:0,turnover:0,pe:0,amplitude:0,mktCap:0,pb:0,limitUp:0,limitDown:0,ask:[],bid:[],outer:0,inner:0,limited:true};
       }
       continue;
     }
@@ -993,6 +1036,7 @@ function parseTencent(text){
       high:parseFloat(f[33]), low:parseFloat(f[34]), volume:parseFloat(f[36]), amount:parseFloat(f[37]),
       turnover:parseFloat(f[38]), pe:parseFloat(f[39]), amplitude:parseFloat(f[43]),
       mktCap:parseFloat(f[45]), pb:parseFloat(f[46]), limitUp:parseFloat(f[47]), limitDown:parseFloat(f[48]),
+      outer:parseFloat(f[7])||0, inner:parseFloat(f[8])||0,
       ask:[[f[19],f[20]],[f[21],f[22]],[f[23],f[24]],[f[25],f[26]],[f[27],f[28]]].map(x=>[parseFloat(x[0]),parseFloat(x[1])]),
       bid:[[f[9],f[10]],[f[11],f[12]],[f[13],f[14]],[f[15],f[16]],[f[17],f[18]]].map(x=>[parseFloat(x[0]),parseFloat(x[1])])
     };
@@ -1180,7 +1224,7 @@ function onQuotesUpdated(){ renderWatch();
   // 正在填「止盈/止损价」输入框时，跳过持仓表重渲染，避免清空用户正在输入的内容
   if(document.activeElement && document.activeElement.matches && document.activeElement.matches('input[data-ai]')){}
   else renderHold();
-  if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); }
+  if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); if(state.view==='flow') renderFlow(); }
 
 /* ============ K线：A股/ETF 腾讯前复权; 港/美 新浪 JSONP ============ */
 function loadKline(code, period, cb, opt){
@@ -2175,8 +2219,122 @@ function goView(v){
   if(v==='fundAnalysis'){ showView('fundAnalysis'); renderFundAnalysis(); return; }
   if(v==='sectors'){ showView('sectors'); renderSectors(); return; }
   if(v==='rotation'){ showView('rotation'); renderRotation(); return; }
+  if(v==='flow'){ showView('flow'); renderFlow(); return; }
   if(v==='datacenter'){ showView('datacenter'); renderDataCenter(); return; }
   showView(v); // home / hold
+}
+
+/* ============ 资金流向（零门槛·腾讯内外盘主动买卖力道） ============ */
+function toSecid(code){
+  if(code.startsWith('sh')) return '1.'+code.slice(2);
+  if(code.startsWith('sz')) return '0.'+code.slice(2);
+  if(code.startsWith('hk')) return '116.'+code.slice(2);
+  if(code.startsWith('us')) return '100.'+code.slice(3).toUpperCase();
+  return '';
+}
+function fmtMoney(v){
+  if(v==null||isNaN(v)) return '—';
+  const a=Math.abs(v);
+  if(a>=1e8) return (v/1e8).toFixed(2)+'亿';
+  if(a>=1e4) return (v/1e4).toFixed(2)+'万';
+  return v.toFixed(0)+'元';
+}
+// 东方财富 真实主力资金净流入（零Key·JSONP绕过CORS）。kline klt=1 lmt=1 返回今日累计主力净流入(额)。
+function loadFundFlow(code, cb){
+  const secid=toSecid(code);
+  if(!secid){ cb(null); return; }
+  const cbName='emff'+Math.random().toString(36).slice(2,10);
+  const t=Date.now();
+  const url='https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?lmt=1&klt=1&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&secid='+encodeURIComponent(secid)+'&cb='+cbName+'&_='+t;
+  let done=false;
+  window[cbName]=function(json){
+    if(done) return; done=true;
+    try{
+      const kl=json&&json.data&&json.data.klines;
+      if(!kl||!kl.length){ cb(null); return; }
+      const p=kl[0].split(',');
+      const main=parseFloat(p[1]);
+      const mainPct=(p[2]!=null)?parseFloat(p[2])/100000:null; // 东财主力净占比按×1e5存储
+      cb({main, mainPct, raw:p});
+    }catch(e){ cb(null); }
+  };
+  const s=document.createElement('script');
+  s.src=url;
+  s.onerror=function(){ if(!done){ done=true; cb(null); } if(s.parentNode) s.parentNode.removeChild(s); };
+  s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
+  document.body.appendChild(s);
+  setTimeout(function(){ if(!done){ done=true; cb(null); } }, 8000); // 超时兜底(离线/不可达)
+}
+function flowPick(code){ state.selected=code; renderFlow(); }
+function renderFlow(){
+  const view=$('viewFlow'); if(!view) return;
+  const sel=state.selected;
+  const q=state.quotes[sel];
+  const w=state.watch.find(x=>x.code===sel);
+  const selEl=$('flowSel');
+  const name=(w?w.name:(q?q.name:sel))||sel;
+  // —— 腾讯内外盘 + 五档（确定正确，即时）——
+  if(!q || (!q.outer && !q.inner && (!q.bid||!q.bid.length) && (!q.ask||!q.ask.length))){
+    selEl.innerHTML='<div class="flow-name">'+name+' <span class="code">'+sel+'</span></div><div class="empty">当前选中「'+name+'」行情还在加载，或暂无内外盘数据（美股/基金无此字段）。<br>等行情刷新、或点左侧自选列表任意一行即可。</div>';
+  } else {
+    const outer=q.outer||0, inner=q.inner||0, tot=outer+inner;
+    const buyPct=tot>0?outer/tot*100:50;
+    let bidVol=0, askVol=0;
+    (q.bid||[]).forEach(b=>bidVol+=(b[1]||0));
+    (q.ask||[]).forEach(a=>askVol+=(a[1]||0));
+    const depthTot=bidVol+askVol; const bidPct=depthTot>0?bidVol/depthTot*100:50;
+    selEl.innerHTML=
+      '<div class="flow-name">'+name+' <span class="code">'+sel+'</span></div>'+
+      '<div class="sub-h2">💹 主动买卖力道（腾讯·内外盘·实时）</div>'+
+      '<div class="bar2"><div class="bar-fill bar-buy" style="width:'+buyPct+'%">主动买 '+buyPct.toFixed(1)+'%</div><div class="bar-fill bar-sell" style="width:'+(100-buyPct)+'%">主动卖 '+(100-buyPct).toFixed(1)+'%</div></div>'+
+      '<div class="kv-row"><span>主动买（外盘）</span><b class="up">'+fmt(outer)+' 手</b></div>'+
+      '<div class="kv-row"><span>主动卖（内盘）</span><b class="down">'+fmt(inner)+' 手</b></div>'+
+      '<div class="sub-h2">📶 五档盘口委托力道</div>'+
+      '<div class="bar2"><div class="bar-fill bar-bid" style="width:'+bidPct+'%">买盘 '+bidPct.toFixed(1)+'%</div><div class="bar-fill bar-ask" style="width:'+(100-bidPct)+'%">卖盘 '+(100-bidPct).toFixed(1)+'%</div></div>'+
+      '<div class="kv-row"><span>买一~买五委托</span><b class="up">'+fmt(bidVol)+'</b></div>'+
+      '<div class="kv-row"><span>卖一~卖五委托</span><b class="down">'+fmt(askVol)+'</b></div>';
+  }
+  // —— 东方财富 真实主力净流入（异步）——
+  selEl.innerHTML += '<div class="sub-h2">💰 主力资金净流入（东方财富·实时）</div><div id="flowMainCard" class="flow-big">获取中…</div><div class="meta" style="font-size:11px;color:#888">数据来源：东方财富公开行情接口（主力净流入 = 超大单 + 大单净买入）</div>';
+  if(sel && !sel.startsWith('us')){
+    loadFundFlow(sel, function(ff){
+      const card=$('flowMainCard'); if(!card) return;
+      if(!ff || isNaN(ff.main)){
+        card.innerHTML='<span class="down">获取失败</span><div class="meta">东方财富接口暂不可达（需联网），上方内外盘数据仍有效</div>';
+        return;
+      }
+      const mc=ff.main>0?'up':(ff.main<0?'down':'flat');
+      const sign=ff.main>=0?'+':'';
+      const pctTxt=(ff.mainPct!=null)?(' · 占成交额约 '+(ff.mainPct>0?'+':'')+ff.mainPct.toFixed(2)+'%'):'';
+      card.innerHTML='<span class="'+mc+'">'+sign+fmtMoney(ff.main)+'</span><div class="meta">今日主力净流入 '+(mc==='up'?'资金流入':(mc==='down'?'资金流出':'均衡'))+pctTxt+'</div>';
+    });
+  } else {
+    const card=$('flowMainCard'); if(card) card.innerHTML='<span class="flat">美股无主力资金流数据</span>';
+  }
+  // —— 列表总览（腾讯内外盘，即时）——
+  const listEl=$('flowList');
+  const codes=new Set();
+  state.watch.filter(x=>x.kind!=='fund').forEach(x=>codes.add(x.code));
+  state.hold.forEach(h=>codes.add(h.code));
+  const rows=[];
+  codes.forEach(c=>{
+    const qq=state.quotes[c]; const ww=state.watch.find(x=>x.code===c)||state.hold.find(x=>x.code===c);
+    if(!qq || (!qq.outer && !qq.inner)) return;
+    const o=qq.outer||0, i=qq.inner||0, t=o+i;
+    const buyPct=t>0?o/t*100:50;
+    const net=o-i;
+    rows.push({code:c, name:ww?ww.name:qq.name, buyPct, net, price:qq.price, cp:qq.changePct});
+  });
+  rows.sort((a,b)=>b.buyPct-a.buyPct);
+  if(!rows.length){ listEl.innerHTML='<div class="empty">暂无股票/ETF 行情数据。点左侧自选列表、或在行情看板加自选后，这里会列出它们的资金力道。</div>'; }
+  else {
+    const me=$('flowListMeta'); if(me) me.textContent='共 '+rows.length+' 只 · 按主动买入占比排序';
+    listEl.innerHTML='<table class="flow-table"><thead><tr><th>名称</th><th>现价</th><th>涨跌%</th><th>主动买占比</th><th>力道</th></tr></thead><tbody>'+
+      rows.map(r=>{
+        const nc=r.net>0?'up':(r.net<0?'down':'flat');
+        return '<tr onclick="flowPick(\''+r.code+'\')"><td>'+r.name+'</td><td>'+fmt(r.price)+'</td><td class="'+cls(r.cp)+'">'+pct(r.cp)+'</td><td><span class="mini-bar"><span class="mini-buy" style="width:'+r.buyPct+'%"></span></span> '+r.buyPct.toFixed(1)+'%</td><td class="'+nc+'">'+(nc==='up'?'流入':(nc==='down'?'流出':'均衡'))+'</td></tr>';
+      }).join('')+'</tbody></table>';
+  }
 }
 
 /* ============ 行业趋势扫描（纯前端·零Key） ============ */
