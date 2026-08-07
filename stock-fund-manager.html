@@ -488,7 +488,7 @@
               <option value="stock">股票/ETF</option>
               <option value="fund">场外基金</option>
             </select>
-            <button id="btnAdd">加</button>
+            <button id="btnAdd">加自选</button>
             <button class="ghost" id="btnDemo">载入示例</button>
             <button class="ghost" id="btnClear">清空自选</button>
           </div>
@@ -801,7 +801,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-06o';   // o=存储可见化: ①save() 包 try/catch, 浏览器禁存储(无痕/隐私/设置关闭)时弹顶部红色警告, 避免误以为已保存; ②加自选/加持仓/导入备份后右下角弹「✓已自动保存」toast; ③持仓区加「数据只存在当前浏览器网址、换设备/清缓存/无痕会丢、建议导出备份」提醒; 启动即探测本地存储可用性。根因: 用户"隔天数据没了"是入口不稳定(CloudStudio沙箱一次性+内置预览面板不跨会话), 非存储bug(已无头实测PERSIST_OK)。
+const APP_VER = '2026-08-06p';   // p=加持仓防错(P1): 顶部"加自选"同时建持仓占位行(数量/成本0)根治"加了不显示"; 持仓表数量/成本价改为可内联编辑(填即出市值盈亏); 按钮更名"加自选"。K线范围按钮+滚轮缩放+拖动实测确认已存在无需再造。
 const LS_WATCH = 'sfm_watch_v2';
 const LS_HOLD  = 'sfm_hold_v2';
 const UP='#e01f22', DOWN='#0f9d58', FLAT='#3a4250', GRID='#e6eaf1', GRIDC='#c7cfdb';
@@ -2695,7 +2695,9 @@ function renderHold(){
       totMV+=m; totCost+=co; totPL+=pl; totDay+=day; gmv+=m; gcost+=co; gpl+=pl; gday+=day;
       const need=(p>0&&c>0&&p<c)?(((c-p)/p)*100):0;
       rows+='<tr><td><div class="name-cell"><span class="nm">'+nameOf(h.code)+'</span><span class="cd">'+h.code+'</span></div></td>'
-        +'<td>'+fmt(n,0)+'</td><td>'+fmt(c)+'</td><td>'+fmt(p)+'</td><td>'+fmt(m)+'</td>'
+        +'<td><input class="ain" type="number" step="1" min="0" data-ai="shares" data-code="'+h.code+'" value="'+(n||0)+'" placeholder="数量" style="width:64px;"></td>'
+        +'<td><input class="ain" type="number" step="0.01" min="0" data-ai="cost" data-code="'+h.code+'" value="'+(c||0)+'" placeholder="成本" style="width:64px;"></td>'
+        +'<td>'+fmt(p)+'</td><td>'+fmt(m)+'</td>'
         +'<td class="'+cls(pl)+'">'+fmt(pl)+'<div class="cellsub">'+(need>0?('回本需涨 +'+need.toFixed(2)+'%'):'')+'</div></td><td class="'+cls(plp)+'">'+pct(plp)+'</td>'
         +'<td class="'+cls(day)+'">'+fmt(day)+'</td>'
         +'<td><input class="ain" type="number" step="0.01" min="0" data-ai="target" data-code="'+h.code+'" value="'+(h.target?h.target:'')+'" placeholder="止盈"></td>'
@@ -2715,7 +2717,8 @@ function renderHold(){
     const code=inp.dataset.code, f=inp.dataset.ai, v=parseFloat(inp.value);
     const h=state.hold.find(x=>x.code===code); if(!h) return;
     h[f] = (v>0)? v : 0; save();
-    if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind==='fund') renderFund(); else renderDetail(); }
+    if(f==='shares'||f==='cost'){ renderHold(); }   // 数量/成本变了→重算市值盈亏
+    else if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind==='fund') renderFund(); else renderDetail(); }
   }; });
 }
 
@@ -2770,14 +2773,28 @@ function addWatch(raw){                          // 自动识别：输入代码�
   if(!raw){ alert('请输入代码'); return; }
   const btn=$('btnAdd'); if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
   detectKind(raw).then(r=>{
-    if(btn){ btn.disabled=false; btn.textContent='添加'; }
+    if(btn){ btn.disabled=false; btn.textContent='加自选'; }
     if(state.watch.some(w=>w.code===r.code)){ selectCode(r.code); toast('✓ 已自动保存'); return; }
     state.watch.push({code:r.code, kind:r.kind});
     save(); toast('✓ 已自动保存到本机浏览器');
     if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name, nav:[], latest:0, prev:0, cum:[]}; loadFund(r.code); }
     else refreshQuotes();
     renderWatch(); renderHoldSelect(); selectCode(r.code);
-  }).catch(()=>{ if(btn){ btn.disabled=false; btn.textContent='添加'; } alert('识别失败，请重试'); });
+  }).catch(()=>{ if(btn){ btn.disabled=false; btn.textContent='加自选'; } alert('识别失败，请重试'); });
+}
+function addWatchAndHold(raw){                    // 顶部「加自选」：加自选的同时建持仓占位行，根治"加了却持仓里看不到"
+  raw=String(raw||"").trim(); if(!raw) return;
+  const btn=$('btnAdd'); if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
+  detectKind(raw).then(r=>{
+    if(btn){ btn.disabled=false; btn.textContent='加自选'; }
+    if(!state.watch.some(w=>w.code===r.code)) state.watch.push({code:r.code, kind:r.kind});
+    if(!state.hold.some(h=>h.code===r.code)) state.hold.push({code:r.code, kind:r.kind, shares:0, cost:0});
+    save();
+    if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); } else refreshQuotes();
+    renderWatch(); renderHoldSelect(); renderHold();
+    toast('✓ 已加自选，并在「持仓管理」建好占位行（填数量/成本价即出盈亏）');
+    selectCode(r.code);
+  }).catch(()=>{ if(btn){ btn.disabled=false; btn.textContent='加自选'; } alert('识别失败，请重试'); });
 }
 function cleanseWatch(){                         // 异步清洗历史被误加 sz/sh 前缀的基金码
   state.watch.forEach(w=>{
@@ -2827,7 +2844,7 @@ function selectCode(code){
   }
 }
 
-$('btnAdd').onclick=()=>{ const v=$('addInput').value; if(v.trim()){ addWatch(v); $('addInput').value=''; } };
+$('btnAdd').onclick=()=>{ const v=$('addInput').value; if(v.trim()){ addWatchAndHold(v); $('addInput').value=''; } };
 $('addInput').addEventListener('keydown',e=>{ if(e.key==='Enter') $('btnAdd').click(); });
 $('btnDemo').onclick=()=>{
   [['sh600519','stock'],['sz300750','stock'],['sh510300','stock'],['hk00700','stock'],['000001','fund']].forEach(([c,k])=>{ if(!state.watch.some(w=>w.code===c)) state.watch.push({code:c,kind:k}); });
