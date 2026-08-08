@@ -530,7 +530,6 @@
             <button class="ghost" id="btnDemo">载入示例</button>
             <button class="ghost" id="btnClear">清空自选</button>
           </div>
-          <div class="explain">📗 <b>红涨绿跌</b>：<span class="up">红=今天涨</span>、<span class="down">绿=跌</span>（A股习惯）。点任意一行看走势图；自选列表可<b>独立滚动</b>，表头（名称/代码）始终固定在顶部，滚动时不影响右侧K线。</div>
           <div class="watch-filter" id="watchFilter" style="display:flex;gap:6px;margin:8px 0;">
             <span class="tg on" data-f="all">全部</span>
             <span class="tg" data-f="stock">股票/ETF</span>
@@ -866,7 +865,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08g';  // g=按真实需求重做自选区: 移除"滚轮切标的"(preventDefault劫持滚动), 改为#viewMarket自身不滚动、左右两栏各自独立滚动; 自选表头thead sticky吸顶(名称/代码固定); 右侧K线chart-card overflow:auto不随左栏滚动; 基金页fund-page同构隔离; 顺带移除renderWatch里的scrollIntoView防打断用户滚动位置
+const APP_VER = '2026-08-08h';  // h=删除行情看板自选卡顶部"📗 红涨绿跌…点任意一行看走势图; 自选列表可独立滚动…"说明文字(g版已用sticky表头+独立滚动实现, 说明冗余)
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
