@@ -853,7 +853,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-07ac';  // ac=资金流向改手动刷新: ①左卡"选中标的资金力道"底部加🕒数据时间(q.time格式化); ②资金流向从全局自动刷新链路(onQuotesUpdated)摘除, 不再实时刷新; 卡片底部新增"↻手动刷新资金流向"按钮(refreshFlow→refreshQuotes回调→renderFlow), 顶部全局手动刷新在flow视图下也会重绘; 卡片/小标题"实时"措辞改为手动快照口径。refreshQuotes新增可选cb回调。
+const APP_VER = '2026-08-08a';  // a=估值温度计(价格历史分位)行业扩军: DC_VAL_UNIVERSE 从15个增至34个, 补齐券商/保险/地产/有色/煤炭/钢铁/化工/农业/传媒/通信/计算机/电力/汽车/家电/食品饮料/创新药/红利/中证1000/稀土等主流行业; pricePct对历史不足5年自动按可用数据算(已验证不崩)。数据仍走腾讯前复权K线, 零Key。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -3252,7 +3252,7 @@ function dcaSim(cum, freq){
   const last=Number(cum[cum.length-1].nav); const mv=units*last;
   return { invested, units, mv, ret:mv/invested-1, minRatio, n:pts.length, startT:Number(cum[0].t), endT:Number(cum[cum.length-1].t) };
 }
-const DC_VAL_UNIVERSE=[ {c:'510300',n:'沪深300ETF'},{c:'510500',n:'中证500ETF'},{c:'159915',n:'创业板ETF'},{c:'510050',n:'上证50ETF'},{c:'588000',n:'科创50ETF'},{c:'512010',n:'医药ETF'},{c:'512660',n:'军工ETF'},{c:'515030',n:'新能源ETF'},{c:'512480',n:'半导体ETF'},{c:'159928',n:'消费ETF'},{c:'512800',n:'银行ETF'},{c:'515790',n:'光伏ETF'},{c:'512690',n:'酒ETF'},{c:'159995',n:'芯片ETF'},{c:'561300',n:'AIETF'} ];
+const DC_VAL_UNIVERSE=[ {c:'510300',n:'沪深300ETF'},{c:'510500',n:'中证500ETF'},{c:'159915',n:'创业板ETF'},{c:'510050',n:'上证50ETF'},{c:'588000',n:'科创50ETF'},{c:'512100',n:'中证1000ETF'},{c:'510880',n:'红利ETF'},{c:'512010',n:'医药ETF'},{c:'159992',n:'创新药ETF'},{c:'512660',n:'军工ETF'},{c:'515030',n:'新能源ETF'},{c:'512480',n:'半导体ETF'},{c:'159995',n:'芯片ETF'},{c:'561300',n:'AIETF'},{c:'159928',n:'消费ETF'},{c:'512690',n:'酒ETF'},{c:'159736',n:'食品饮料ETF'},{c:'512800',n:'银行ETF'},{c:'512000',n:'券商ETF'},{c:'512070',n:'保险ETF'},{c:'512200',n:'房地产ETF'},{c:'512400',n:'有色金属ETF'},{c:'515220',n:'煤炭ETF'},{c:'515210',n:'钢铁ETF'},{c:'159870',n:'化工ETF'},{c:'159825',n:'农业ETF'},{c:'512980',n:'传媒ETF'},{c:'515880',n:'通信ETF'},{c:'159998',n:'计算机ETF'},{c:'159611',n:'电力ETF'},{c:'516110',n:'汽车ETF'},{c:'159996',n:'家电ETF'},{c:'516780',n:'稀土ETF'},{c:'515790',n:'光伏ETF'} ];
 function _median(a){ const b=a.filter(v=>v!=null).slice().sort((x,y)=>x-y); if(!b.length) return null; const m=Math.floor(b.length/2); return b.length%2?b[m]:(b[m-1]+b[m])/2; }
 function _dcTile(lbl,valTxt,color,frac){ const w=Math.max(0,Math.min(1,frac))*100; return '<div class="dc-tile"><div class="lbl">'+lbl+'</div><div class="v" style="color:'+color+'">'+valTxt+'</div><div class="bar"><i style="width:'+w.toFixed(0)+'%;background:'+color+'"></i></div></div>'; }
 function _dcLineChart(inv,mv,w,h){
