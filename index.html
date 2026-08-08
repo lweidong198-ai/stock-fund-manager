@@ -526,7 +526,7 @@
             <button class="ghost" id="btnDemo">载入示例</button>
             <button class="ghost" id="btnClear">清空自选</button>
           </div>
-          <div class="explain">📗 <b>红涨绿跌</b>：<span class="up">红=今天涨</span>、<span class="down">绿=跌</span>（A股习惯）。点任意一行，右侧显示它的走势图。</div>
+          <div class="explain">📗 <b>红涨绿跌</b>：<span class="up">红=今天涨</span>、<span class="down">绿=跌</span>（A股习惯）。点任意一行看走势图；鼠标在自选区<b>上下滚轮</b>可逐只切换查看。</div>
           <div class="watch-filter" id="watchFilter" style="display:flex;gap:6px;margin:8px 0;">
             <span class="tg on" data-f="all">全部</span>
             <span class="tg" data-f="stock">股票/ETF</span>
@@ -862,7 +862,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08e';  // e=修复自选卡"持有中"误显示: 旧版"加自选"曾自动在持仓建空占位行, 导致历史数据里残留shares=0的515050等空记录仍被标"持有中"。改为仅当持仓有真实数量/成本(shares>0||cost>0)才显示"持有中", 空占位行不再误导。
+const APP_VER = '2026-08-08f';  // f=自选区鼠标滚轮上下切换查看标的(不滚列表本身, 高亮行自动跟进); e=修复自选卡"持有中"误显示(旧版加自选曾自动建空持仓占位, 改仅shares>0||cost>0才标)
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -3020,7 +3020,32 @@ function renderWatch(){
   box.querySelectorAll('tr[data-code]').forEach(tr=>tr.onclick=(e)=>{ if(e.target.dataset.del || e.target.closest('.wl-cat')) return; selectCode(tr.dataset.code); });
   box.querySelectorAll('button[data-del]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); delWatch(b.dataset.del); });
   box.querySelectorAll('select.wl-cat').forEach(s=>s.onchange=()=>{ const w=state.watch.find(x=>x.code===s.dataset.code); if(w){ w.cat=s.value; save(); renderWatch(); } });
+  // 滚轮切换标的后，让当前高亮行始终保持在视野内（长列表也能持续看到正在看的这只）
+  const _selRow = box.querySelector('tr.wl-row.sel');
+  if(_selRow) _selRow.scrollIntoView({block:'nearest'});
 }
+
+/* 自选区鼠标滚轮：上下滚切换查看的标的（不滚列表本身，长列表靠高亮行自动跟进） */
+function installWatchWheel(){
+  const wb=$('watchBox'); if(!wb) return;
+  let _lock=0;
+  wb.addEventListener('wheel',(e)=>{
+    const rows=Array.from(wb.querySelectorAll('tr.wl-row'));
+    if(rows.length<2) return;                 // 少于 2 只无需切换
+    const now=Date.now();
+    if(now-_lock<160) return;                 // 节流，避免一次手势连切多只
+    let cur=rows.findIndex(r=>r.classList.contains('sel'));
+    if(cur<0) cur=0;
+    let next;
+    if(e.deltaY>0) next=(cur+1)%rows.length;                   // 向下滚→下一只
+    else if(e.deltaY<0) next=(cur-1+rows.length)%rows.length;  // 向上滚→上一只
+    else return;
+    _lock=now;
+    e.preventDefault();                       // 拦截默认滚动，只做标的切换
+    selectCode(rows[next].dataset.code);      // 切换查看（右侧图表/净值同步刷新）
+  },{passive:false});
+}
+
 function renderWatchCats(){
   const bar=$('watchCats'); if(!bar) return;
   const cur = state.watchCat||'all';
@@ -3688,6 +3713,7 @@ refreshIndices();
 showView('home');
 if(!state.selected && state.watch.length){ state.selected=state.watch[0].code; } // 默认选中第一只，避免初次进各视图空白
 renderWatch(); renderHold(); renderHoldSelect(); renderFund();
+installWatchWheel();   // 自选区鼠标滚轮：上下滚切换查看的标的（不滚列表本身）
 const _funds=fundCodesToLoad();
 if(_funds.length){ _funds.forEach(c=>loadFund(c)); } refreshQuotes();
 renderGlobalRegime();   // 顶部常驻市况战略透镜（异步拉沪深300近60日，不阻塞首屏）
