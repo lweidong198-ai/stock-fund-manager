@@ -853,7 +853,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08a';  // a=估值温度计(价格历史分位)行业扩军: DC_VAL_UNIVERSE 从15个增至34个, 补齐券商/保险/地产/有色/煤炭/钢铁/化工/农业/传媒/通信/计算机/电力/汽车/家电/食品饮料/创新药/红利/中证1000/稀土等主流行业; pricePct对历史不足5年自动按可用数据算(已验证不崩)。数据仍走腾讯前复权K线, 零Key。
+const APP_VER = '2026-08-08b';  // b=修复"加自选"误建持仓的bug: 顶部「加自选」按钮原调用addWatchAndHold(加自选同时建持仓占位行), 导致加自选后自选行显示"持仓中"; 改为仅调addWatch(只进自选), 删除addWatchAndHold。已_puppeteer真机验证: 加自选后watch+1/hold不动/不显示持仓中。另澄清: 估值温度计=价格历史分位(真实新浪K线算), 非市盈率估值; 通信ETF真实3年分位1.5%/5年0.9%(历史价格极低)。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -3112,20 +3112,6 @@ function addWatch(raw){                          // 自动识别：输入代码�
     renderWatch(); renderHoldSelect(); selectCode(r.code);
   }).catch(()=>{ if(btn){ btn.disabled=false; btn.textContent='加自选'; } alert('识别失败，请重试'); });
 }
-function addWatchAndHold(raw){                    // 顶部「加自选」：加自选的同时建持仓占位行，根治"加了却持仓里看不到"
-  raw=String(raw||"").trim(); if(!raw) return;
-  const btn=$('btnAdd'); if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
-  detectKind(raw).then(r=>{
-    if(btn){ btn.disabled=false; btn.textContent='加自选'; }
-    if(!state.watch.some(w=>w.code===r.code)) state.watch.push({code:r.code, kind:r.kind});
-    if(!state.hold.some(h=>h.code===r.code)) state.hold.push({code:r.code, kind:r.kind, shares:0, cost:0});
-    save();
-    if(r.kind==='fund'){ if(r.name) state.fundData[r.code]={name:r.name,nav:[],latest:0,prev:0,cum:[]}; loadFund(r.code); } else refreshQuotes();
-    renderWatch(); renderHoldSelect(); renderHold();
-    toast('✓ 已加自选，并在「持仓管理」建好占位行（填数量/成本价即出盈亏）');
-    selectCode(r.code);
-  }).catch(()=>{ if(btn){ btn.disabled=false; btn.textContent='加自选'; } alert('识别失败，请重试'); });
-}
 function cleanseWatch(){                         // 异步清洗历史被误加 sz/sh 前缀的基金码
   state.watch.forEach(w=>{
     if(/^(sh|sz|hk)(\d{6})$/i.test(w.code) || /^\d{6}$/.test(w.code)){
@@ -3174,7 +3160,7 @@ function selectCode(code){
   }
 }
 
-$('btnAdd').onclick=()=>{ const v=$('addInput').value; if(v.trim()){ addWatchAndHold(v); $('addInput').value=''; } };
+$('btnAdd').onclick=()=>{ const v=$('addInput').value; if(v.trim()){ addWatch(v); $('addInput').value=''; } };
 $('addInput').addEventListener('keydown',e=>{ if(e.key==='Enter') $('btnAdd').click(); });
 $('btnDemo').onclick=()=>{
   [['sh600519','stock'],['sz300750','stock'],['sh510300','stock'],['hk00700','stock'],['000001','fund']].forEach(([c,k])=>{ if(!state.watch.some(w=>w.code===c)) state.watch.push({code:c,kind:k}); });
