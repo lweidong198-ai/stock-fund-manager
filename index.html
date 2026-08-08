@@ -862,7 +862,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08d';  // d=自选卡新增「自定义分类」功能: state.watchCats(默认含'默认') + state.watchCat筛选; 分类条(全部/各分类/＋新建, 双击重命名/✕删除且项下自选移回默认); 每行下拉切换所属分类; 加自选自动归入当前分类; 数据持久化LS_WATCH_CATS。与现有股票/ETF·场外基金类型筛选并存(两层筛选叠加)。
+const APP_VER = '2026-08-08e';  // e=修复自选卡"持有中"误显示: 旧版"加自选"曾自动在持仓建空占位行, 导致历史数据里残留shares=0的515050等空记录仍被标"持有中"。改为仅当持仓有真实数量/成本(shares>0||cost>0)才显示"持有中", 空占位行不再误导。
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -3005,7 +3005,8 @@ function renderWatch(){
     const cpTxt = cp==null?'--':pct(cp);
     const sel = code===state.selected?' sel':'';
     const ccls = cp==null?'flat':cls(cp);
-    const held = state.hold.some(h=>(''+h.code).replace(/^(sz|sh|hk)/i,'')===(''+code).replace(/^(sz|sh|hk)/i,''));
+    const hRec = state.hold.find(x=>(''+x.code).replace(/^(sz|sh|hk)/i,'')===(''+code).replace(/^(sz|sh|hk)/i,''));
+    const held = !!(hRec && (hRec.shares>0 || hRec.cost>0));   // 仅真实持仓(填了数量/成本)才标"持有中"; 旧版自动建的空占位行(shares=0)不再误显示
     const catOpts = state.watchCats.map(c=>'<option value="'+c.id+'"'+(w.cat===c.id?' selected':'')+'>'+escapeHtml(c.name)+'</option>').join('');
     html+='<tr class="wl-row'+sel+'" data-code="'+code+'">'
       +'<td class="wl-name">'+escapeHtml(name)+'<span class="wl-code">'+code+'</span><span class="wl-kind">'+(isFund?'基':'股')+'</span>'+(held?'<span class="wl-held">持仓中</span>':'')+'<button class="wl-del" data-del="'+code+'" title="删除">✕</button></td>'
