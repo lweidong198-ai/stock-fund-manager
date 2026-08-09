@@ -301,6 +301,8 @@
 .fund-side .watch-card{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
 .fund-side #oppList{flex:1;min-height:0;overflow:auto;}
 .fund-page .chart-card{overflow:auto;min-height:0;}
+.etf-jump{display:inline-block;margin:3px 4px;padding:3px 10px;border:1px solid #2b8a6b;border-radius:12px;color:#2b8a6b;cursor:pointer;font-size:12px;user-select:none;transition:.15s;}
+.etf-jump:hover{background:#2b8a6b;color:#fff;}
   /* 机会精选 */
   .opp-toolbar{display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap;}
   .opp-list{display:flex;flex-direction:column;gap:7px;}
@@ -908,7 +910,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08k';  // k=修复行情看板点场外基金"无数据": 场外基金净值来自东方财富, 沙箱/预览环境不可达时不再卡"加载中"/不再显示假演示净值, 改为明确提示(为何无数据+本机打开/换场内ETF建议); 新增state.fundFail标记(东财onerror/超时触发, applyFundData成功清除); 自选列表对不可达基金诚实显示"—"; 新增paintCanvasMsg; j=机会精选模块; i=点基金原地画净值
+const APP_VER = '2026-08-08l';  // l=行情看板点纯场外基金无数据时, 提示区直接给「一键看场内ETF走势」可点击入口(515050/510300/159915/161725, 走腾讯K线沙箱完全可用); 实测确认纯场外基金在https沙箱域名下东财反爬返回空壳f035=undef/腾讯不认/新浪CORS拦→任何免费源都拿不到, 非bug; 本机file://打开东财放行故有数据; k=点场外基金无数据明确提示; j=机会精选; i=点基金原地画净值
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -3252,9 +3254,11 @@ function showMarketFund(code){
   if(state.fundFail && state.fundFail[code]){
     $('mFName').textContent=code; $('mFPrice').textContent='—'; $('mFChg').textContent='—'; $('mFChg').className='flat';
     $('mFMeta').textContent='场外基金 · 单位净值'; $('mFTime').textContent=''; $('mFSub').textContent='';
-    $('mFHint').innerHTML='🌐 此标的为<b>场外基金</b>，净值来自东方财富（fund.eastmoney.com）。当前「预览/沙箱」环境网络受限，无法访问该数据源，所以这里暂无数据。';
-    $('mFStat').textContent='东方财富数据源在当前环境不可达';
-    paintCanvasMsg('mFundNav','东方财富净值\n当前环境不可访问\n\n建议：① 本机双击 index.html 使用\n② 或换场内ETF(如 515050 / 510300) 看K线', '#999');
+    $('mFHint').innerHTML='🌐 此标的为<b>场外基金</b>，净值来自东方财富。当前「预览/沙箱」域名被东方财富反爬拦截，所以这里暂无数据（非 app 故障，<b>本机双击 index.html 可看真实净值</b>）。<br>想在行情看板看基金走势？直接看<b>场内 ETF</b>（走腾讯 K 线，沙箱完全可用）：'+
+      [['sh510300','沪深300ETF'],['sh515050','5G通信ETF'],['sz159915','创业板ETF'],['sz161725','白酒LOF']]
+      .map(([c,n])=>`<span class="etf-jump" onclick="addWatch('${c}')">${n}</span>`).join('');
+    $('mFStat').textContent='场外基金净值·当前环境不可达（可看场内ETF走势）';
+    paintCanvasMsg('mFundNav','场外基金净值\n当前环境不可访问\n\n点击下方场内ETF\n可直接看K线走势', '#999');
     return;
   }
   const fd=state.fundData[code];
