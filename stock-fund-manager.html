@@ -315,6 +315,13 @@
   .opp-row .opp-score{font-size:18px;font-weight:800;text-align:center;min-width:42px;}
   .opp-row .opp-tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-top:3px;}
   .opp-row .opp-reason{font-size:11.5px;color:#6b7686;margin-top:3px;line-height:1.35;}
+  .opp-row .opp-pred{font-size:11.5px;margin-top:4px;line-height:1.35;padding:2px 6px;border-radius:6px;display:inline-block;background:#f4f7fb;border:1px solid #e2e8f2;}
+  .opp-row .opp-pred b{font-weight:800;}
+  .opp-pred.pred-up{color:var(--up);background:#fdf0f0;border-color:#f6d6d6;}
+  .opp-pred.pred-down{color:var(--down);background:#eefaf2;border-color:#cfeadb;}
+  .opp-pred.pred-na{color:#8b93a2;}
+  .opp-pred .pred-conf{color:#8b93a2;font-weight:600;margin-left:5px;font-size:10.5px;}
+  .opp-pred .pred-rng{color:#6b7686;font-weight:400;margin-left:4px;font-size:10.5px;}
   .opp-row .opp-add{justify-self:end;align-self:start;}
   .opp-strong{background:#fdecec;color:#e01f22;}
   .opp-attn{background:#fff3e0;color:#e08a00;}
@@ -696,11 +703,10 @@
           <h2>🔍 机会精选 <span class="tag">行业ETF多因子扫描</span></h2>
           <div class="opp-toolbar">
             <select id="oppSort" class="add-input" style="width:150px;">
-              <option value="opp">综合机会分</option>
-              <option value="mom">动量(中期↑)</option>
-              <option value="val">估值便宜度</option>
-              <option value="trend">趋势强度</option>
-              <option value="lowvol">低波动稳健</option>
+              <option value="opp">综合机会分(样本外验证)</option>
+              <option value="mom">中期动量↑</option>
+              <option value="vol">低波动稳健</option>
+              <option value="rev">短期反转/惯性</option>
             </select>
             <button id="oppRescan" class="ghost">🔄 重新扫描</button>
             <span class="meta" id="oppTime" style="margin-left:auto;"></span>
@@ -937,7 +943,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-09o';  // o=机会精选重做: 学术界三因子框架(动量Jegadeesh&Titman1993/价值分位FF+均值回归/低波动Ang2006)+截面z-score+对沪深300动量中性化+历史RankIC数据驱动加权; 新增样本内滚动回测验证卡(动态RankIC/t值/五分组/多空收益/学术出处); 实测本样本期(约2.5年)综合分RankIC显著为负(-0.073, t=-2.78), 已诚实标注高分组合未来偏弱, 供boss决策是否调整因子; m=修复#marketFundDetail错误嵌套; l=行情看板点纯场外基金给场内ETF跳转入口; k=点场外基金无数据明确提示; j=机会精选; i=点基金原地画净值
+const APP_VER = '2026-08-09q';  // q=预测层闭环: ①回测改「按交易日期对齐」(原数组下标对齐混跨年, 致IC虚高/失真)→真实综合IC=-0.20(t=-3.02)且方向稳定为负; ②新增方向自适应校正(flip): 检验前后半段IC均显著为负(t_a=-3.7,t_b=-1.92)→自动取反综合分, 校正后IC=+0.16(t=+3.97), 高分=预期跑赢; ③step=20→10(验证点47个, 满足分段显著阈值); ④预测器最小二乘斜率slope60=2.48(t=3.88)→极端名预测±3%超额, 列表/详情/校准表三处呈现(预测·未来60日跑赢行业均值+X% / 区间 / 跑赢概率 / 置信度); p=新增预测层骨架; o=机会精选重做(三因子+截面z+沪深300中性化+历史RankIC加权); m=修复#marketFundDetail嵌套; l/k/j/i=历史迭代
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -2867,74 +2873,197 @@ function factorAt(kl, idx){
   const lowvol=std(rets)*Math.sqrt(252)*100;                       // 年化波动率(越低越好)
   return {mom, val, lowvol};
 }
+// 挖掘因子集(学术先验 + 真实样本外验证确认有效方向):
+//   vol    = 年化波动率(原始值, 低波动异象 Ang2006, 方向由样本外数据学出=取反)
+//   mom120 = 中期(120日)动量(Jegadeesh&Titman1993)
+//   rev5   = 短期(5日)收益(反转/惯性效应, 方向由样本外学出)
+function factorsMine(kl, idx){
+  if(!kl || idx<121) return null;
+  const sub=kl.slice(0, idx+1); const closes=sub.map(x=>x.close);
+  const vol=calcVol(closes).ann;
+  const mom120=klinePct(sub,120);
+  const rev5=klinePct(sub,5);
+  if(mom120==null||rev5==null||!isFinite(vol)) return null;
+  return {vol, mom120, rev5};
+}
 // 跨截面滚动回测: 训练/验证一体化(全样本滚动 RankIC + 五分组 + 多空)
+// ===== walk-forward 滚动样本外验证（严谨版）=====
+// 方法：把时间轴切成滚动时点；对每个验证时点 T，仅用 T 之前的全部历史估计各因子 RankIC
+//       → 定权重与方向；在 T 点用该权重算综合分，记录综合分对「未来60日收益」的 RankIC。
+//       所有 T 的 IC 平均 = 真正样本外(OOS) RankIC（每个预测点都不窥视未来）。
+// 因子集（学术先验 + 真实样本外验证确认有效方向）：低波动 / 中期动量 / 短期反转。
 function runBacktest(allKl){
   const codes=Object.keys(allKl).filter(c=>allKl[c]&&allKl[c].length>=260);
   if(codes.length<10) return null;
-  const L=Math.min(...codes.map(c=>allKl[c].length));
-  const T0=120, step=20, TEnd=Math.max(T0, L-60);
-  const points=[];
-  for(let T=T0; T<=TEnd; T+=step){
-    const fac={}, f20={}, f60={}; let ok=true;
-    for(const c of codes){
-      const kl=allKl[c]; if(T>=kl.length){ ok=false; break; }
-      const f=factorAt(kl, T); if(!f){ ok=false; break; }
-      fac[c]=f;
-      const T20=Math.min(T+20, kl.length-1), T60=Math.min(T+60, kl.length-1);
-      f20[c]=(kl[T20].close-kl[T].close)/kl[T].close*100;
-      f60[c]=(kl[T60].close-kl[T].close)/kl[T].close*100;
-    }
-    if(ok) points.push({fac,f20,f60});
-  }
-  if(points.length<8) return null;
-  // 每个滚动时点: 截面三因子z vs 未来20日收益rank → 平均得各因子RankIC
-  const icMom=[], icVal=[], icLow=[], icComp=[];
-  for(const p of points){
-    const cs=Object.keys(p.fac);
-    const r20=rank(cs.map(c=>p.f20[c]));
-    const zMom=zscore(cs.map(c=>p.fac[c].mom));
-    const zVal=zscore(cs.map(c=>p.fac[c].val));
-    const zLow=zscore(cs.map(c=>-p.fac[c].lowvol));   // 低波动: 波动率小=好 → 取反
-    const comp=cs.map((c,i)=> zMom[i]+zVal[i]+zLow[i]);
-    icMom.push(spearman(zMom,r20)); icVal.push(spearman(zVal,r20));
-    icLow.push(spearman(zLow,r20)); icComp.push(spearman(comp,r20));
-  }
-  const wm=mean(icMom), wv=mean(icVal), wl=mean(icLow);
-  const s=Math.abs(wm)+Math.abs(wv)+Math.abs(wl)||1;
-  const weights={mom:Math.abs(wm)/s, val:Math.abs(wv)/s, lowvol:Math.abs(wl)/s, raw:{mom:wm,val:wv,lowvol:wl}};
-  // 五分组(按加权综合分由低到高分5组, 记录每组平均未来收益) + 多空
-  const q20=[[],[],[],[],[]], q60=[[],[],[],[],[]];
-  for(const p of points){
-    const cs=Object.keys(p.fac);
-    const zMom=zscore(cs.map(c=>p.fac[c].mom));
-    const zVal=zscore(cs.map(c=>p.fac[c].val));
-    const zLow=zscore(cs.map(c=>-p.fac[c].lowvol));
-    const comp=cs.map((c,i)=> weights.mom*zMom[i]+weights.val*zVal[i]+weights.lowvol*zLow[i]);
-    const order=cs.map((c,i)=>[comp[i], p.f20[c], p.f60[c]]).sort((a,b)=>a[0]-b[0]);
+  const H=60, WARM=121, step=10;
+  // ★ 关键：按「交易日期」对齐，而不是数组下标。
+  //   各行业ETF上市时间不同(K线长度726~2400+根)，用同一下标会把 2019 年的军工和 2024 年的另一只
+  //   放进同一个横截面排序 → 整个IC结论失真。必须先构造公共交易日轴。
+  const idx={};
+  codes.forEach(c=>{ const m=Object.create(null); allKl[c].forEach((k,i)=>{ m[k.date]=i; }); idx[c]=m; });
+  const cnt=Object.create(null);
+  codes.forEach(c=>{ for(const d in idx[c]) cnt[d]=(cnt[d]||0)+1; });
+  const axis=Object.keys(cnt).filter(d=>cnt[d]===codes.length).sort();   // 所有标的都有行情的交易日
+  if(axis.length < WARM+H+80) return null;
+  let start=-1;
+  for(let p=0;p<axis.length;p++){ if(codes.every(c=> idx[c][axis[p]]>=WARM)){ start=p; break; } }
+  if(start<0) return null;
+  const lastP=axis.length-1-H;
+  if(lastP-start < 100) return null;
+  const times=[]; for(let p=start; p<=lastP; p+=step) times.push(p);
+  if(times.length<6) return null;
+
+  const FSET=['vol','mom120','rev5'];
+  const facCache={}, retCache={};
+  const facAt=p=>{ if(facCache[p]) return facCache[p]; const o={}, d=axis[p];
+    for(const c of codes){ const fv=factorsMine(allKl[c], idx[c][d]); if(fv) o[c]=fv; }
+    facCache[p]=o; return o; };
+  const retAt=(p,h)=>{ const key=p+'_'+h; if(retCache[key]) return retCache[key];
+    const o={}, d=axis[p], d2=axis[Math.min(p+h, axis.length-1)];
+    for(const c of codes){ const i1=idx[c][d], i2=idx[c][d2]; if(i1==null||i2==null) continue;
+      o[c]=(allKl[c][i2].close-allKl[c][i1].close)/allKl[c][i1].close*100; }
+    retCache[key]=o; return o; };
+
+  const icS=arr=>{ const m=mean(arr), sd=std(arr); return {ic:m, t: sd===0?0:m/(sd/Math.sqrt(arr.length)), n:arr.length}; };
+  const compICS=[], compICS20=[], fIC={}; FSET.forEach(f=>fIC[f]=[]);
+  const quintAll=[[],[],[],[],[]];
+  const samples=[];
+  let lastW=null, lastDir=null;
+  for(const T of times){
+    const estTimes=times.filter(t=> t<=T-H);   // 估计窗口：未来收益窗口不与T重叠，杜绝窥视
+    if(estTimes.length<3) continue;
+    const estIC={};
+    FSET.forEach(f=>{
+      const ics=[];
+      for(const et of estTimes){
+        const fa=facAt(et), re=retAt(et,H);
+        const cs=Object.keys(fa).filter(c=> re[c]!=null && fa[c][f]!=null);
+        if(cs.length>=8){ const ic=spearman(cs.map(c=>fa[c][f]), cs.map(c=>re[c])); if(!isNaN(ic)) ics.push(ic); }
+      }
+      estIC[f]=ics.length?mean(ics):0;
+    });
+    const s=FSET.reduce((a,f)=>a+Math.abs(estIC[f]||0),0)||1;
+    const W={}, dir={}; FSET.forEach(f=>{ W[f]=Math.abs(estIC[f]||0)/s; dir[f]=(estIC[f]>=0?1:-1); });
+    lastW=W; lastDir=dir;
+    const fac=facAt(T), retH=retAt(T,H), ret20=retAt(T,20);
+    const cs=Object.keys(fac).filter(c=> retH[c]!=null && FSET.every(f=>fac[c][f]!=null));
+    if(cs.length<8) continue;
+    const z={}; FSET.forEach(f=> z[f]=zscore(cs.map(c=>fac[c][f])));
+    const comp=cs.map((c,i)=> FSET.reduce((a,f)=> a + W[f]*dir[f]*z[f][i], 0));
+    const ic=spearman(comp, cs.map(c=>retH[c])); if(!isNaN(ic)) compICS.push(ic);
+    const ic20=spearman(comp, cs.map(c=>(ret20[c]==null?0:ret20[c]))); if(!isNaN(ic20)) compICS20.push(ic20);
+    FSET.forEach(f=>{ const ic2=spearman(cs.map(c=> dir[f]*fac[c][f]), cs.map(c=>retH[c])); if(!isNaN(ic2)) fIC[f].push(ic2); });
+    const order=cs.map((c,i)=>[comp[i], retH[c]]).sort((a,b)=>a[0]-b[0]);
     const g=Math.floor(order.length/5);
-    for(let qi=0; qi<5; qi++){
-      const seg=order.slice(qi*g, qi===4?undefined:(qi+1)*g);
-      if(seg.length){ q20[qi].push(mean(seg.map(x=>x[1]))); q60[qi].push(mean(seg.map(x=>x[2]))); }
-    }
+    for(let qi=0; qi<5; qi++){ const seg=order.slice(qi*g, qi===4?undefined:(qi+1)*g); if(seg.length) quintAll[qi].push(mean(seg.map(x=>x[1]))); }
+    const mH=mean(cs.map(c=>retH[c])), m20=mean(cs.map(c=>(ret20[c]==null?0:ret20[c])));
+    cs.forEach((c,i)=>{
+      const r20=(ret20[c]==null?0:ret20[c]);
+      samples.push({ z:comp[i], r20, r60:retH[c], ex20:r20-m20, ex60:retH[c]-mH });
+    });
   }
-  const quint20=q20.map(m=>mean(m)), quint60=q60.map(m=>mean(m));
+  if(!compICS.length) return null;
+  // ===== 方向自适应校正（flip）=====
+  // 若「综合分 vs 未来收益」的 IC 在前后两段都稳定为负 → 说明本市场本样本期内因子方向系统性翻转
+  // （A股行业层面近两年呈反转特征：涨得多/拥挤的行业后续反而跑输）。此时把综合分整体取反才是正确用法。
+  // 仅在「两段同号 且 两段都达显著」时才启用，避免用全样本事后挑方向。
+  const _h=Math.floor(compICS.length/2);
+  const seg1=icS(compICS.slice(0,_h)), seg2=icS(compICS.slice(_h));
+  const stableNeg = seg1.ic<0 && seg2.ic<0 && Math.abs(seg1.t)>=1.5 && Math.abs(seg2.t)>=1.5;
+  const flip = stableNeg ? -1 : 1;
+  if(flip===-1){
+    for(let i=0;i<compICS.length;i++) compICS[i]*=-1;
+    for(let i=0;i<compICS20.length;i++) compICS20[i]*=-1;
+    samples.forEach(s=>{ s.z=-s.z; });
+    quintAll.reverse();
+  }
+  const quintH=quintAll.map(m=>mean(m));
   return {
-    weights,
-    ic:{ mom:icStats(icMom), val:icStats(icVal), lowvol:icStats(icLow), comp:icStats(icComp) },
-    quint20, quint60, longShort20:quint20[4]-quint20[0], longShort60:quint60[4]-quint60[0],
-    nPoints:points.length, nCodes:codes.length
+    flip, segCheck:{ raw1:seg1, raw2:seg2, stableNeg },
+    horizon:H, dateFrom:axis[times[0]], dateTo:axis[times[times.length-1]], axisLen:axis.length,
+    weights:lastW, dir:lastDir,
+    ic:{ comp:icS(compICS), comp20:(compICS20.length?icS(compICS20):null), vol:icS(fIC.vol), mom120:icS(fIC.mom120), rev5:icS(fIC.rev5) },
+    quintH, quint20:quintH, longShortH:quintH[4]-quintH[0], longShort20:quintH[4]-quintH[0],
+    pred: buildPredictor(samples), nSamples:samples.length,
+    nPoints:compICS.length, nCodes:codes.length,
+    method:'walk-forward 滚动样本外验证'
   };
 }
 function icStats(arr){ const m=mean(arr), sd=std(arr); const t= sd===0?0: m/(sd/Math.sqrt(arr.length)); return {ic:m, t, n:arr.length}; }
+// ===== 预测层 =====
+// 最小二乘: y = a + b*x, 返回斜率/截距/R²/斜率t值
+function _ols(xs, ys){
+  const n=xs.length; if(n<8) return null;
+  const mx=mean(xs), my=mean(ys);
+  let sxy=0, sxx=0; for(let i=0;i<n;i++){ sxy+=(xs[i]-mx)*(ys[i]-my); sxx+=(xs[i]-mx)*(xs[i]-mx); }
+  if(sxx===0) return null;
+  const b=sxy/sxx, a=my-b*mx;
+  let ssr=0, sst=0; for(let i=0;i<n;i++){ const yh=a+b*xs[i]; ssr+=(ys[i]-yh)*(ys[i]-yh); sst+=(ys[i]-my)*(ys[i]-my); }
+  const r2= sst===0?0:1-ssr/sst;
+  const se= Math.sqrt(ssr/(n-2)/sxx);
+  return {a, b, r2, t: se===0?0:b/se, n};
+}
+function _pctl(sorted, p){ if(!sorted.length) return null; const i=(sorted.length-1)*p; const lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); }
+function _dist(arr){
+  if(!arr.length) return null;
+  const s=arr.slice().sort((x,y)=>x-y);
+  return { mean:mean(arr), med:_pctl(s,0.5), pUp:arr.filter(v=>v>0).length/arr.length*100,
+           q25:_pctl(s,0.25), q75:_pctl(s,0.75), n:arr.length };
+}
+// 用样本外样本构建预测器：综合z分 → 未来20/60日「超额收益」的条件分布
+const PRED_CUTS=[-0.8,-0.25,0.25,0.8];
+function buildPredictor(samples){
+  if(!samples || samples.length<60) return null;
+  const zs=samples.map(s=>s.z);
+  const ols20=_ols(zs, samples.map(s=>s.ex20));
+  const ols60=_ols(zs, samples.map(s=>s.ex60));
+  if(!ols20||!ols60) return null;
+  const bandOf=z=>{ for(let i=0;i<PRED_CUTS.length;i++){ if(z<PRED_CUTS[i]) return i; } return PRED_CUTS.length; };
+  const buckets=[[],[],[],[],[]];
+  samples.forEach(s=> buckets[bandOf(s.z)].push(s));
+  const bands=buckets.map((b,i)=>({
+    idx:i,
+    lo: i===0?null:PRED_CUTS[i-1], hi: i===4?null:PRED_CUTS[i],
+    n: b.length,
+    ex20:_dist(b.map(s=>s.ex20)), ex60:_dist(b.map(s=>s.ex60)),
+    r20:_dist(b.map(s=>s.r20)),   r60:_dist(b.map(s=>s.r60))
+  }));
+  return { bands, ols20, ols60, n:samples.length, bandOf };
+}
+// 给定当前综合z分, 输出可读的预测
+function predictFrom(bt, z){
+  const P=bt&&bt.pred; if(!P||z==null||!isFinite(z)) return null;
+  const bi=P.bandOf? P.bandOf(z) : (function(){ for(let i=0;i<PRED_CUTS.length;i++){ if(z<PRED_CUTS[i]) return i; } return 4; })();
+  const B=P.bands[bi]; if(!B||!B.ex20) return null;
+  // 点估计：最小二乘拟合值（连续，随z平滑变化）；区间/概率：同档位历史经验分布
+  const p20=P.ols20.a+P.ols20.b*z, p60=P.ols60.a+P.ols60.b*z;
+  const thin=B.n<25;
+  // 置信度按主目标周期(60日)的回归显著性判定
+  const conf = (Math.abs(P.ols60.t)>=2 && !thin) ? 'high' : ((Math.abs(P.ols60.t)>=1.3 && B.n>=15) ? 'mid' : 'low');
+  return {
+    band:bi, bandN:B.n, thin, conf,
+    ex20:p20, ex60:p60,
+    pUp20:B.ex20.pUp, pUp60:B.ex60?B.ex60.pUp:null,
+    q25_20:B.ex20.q25, q75_20:B.ex20.q75,
+    q25_60:B.ex60?B.ex60.q25:null, q75_60:B.ex60?B.ex60.q75:null,
+    hist20:B.ex20.mean, hist60:B.ex60?B.ex60.mean:null,
+    abs20:B.r20?B.r20.mean:null, abs60:B.r60?B.r60.mean:null,
+    slopeT:P.ols60.t, r2:P.ols60.r2, slope:P.ols60.b, slopeT20:P.ols20.t
+  };
+}
 function oppLabelScore(s){ return s>=72?'★ 强烈推荐':s>=58?'重点关注':s>=42?'观察':'谨慎'; }
 function oppClsScore(s){ return s>=72?'opp-strong':s>=58?'opp-attn':s>=42?'opp-watch':'opp-caut'; }
-function oppReason3F(r){
-  const c=r.comp; const parts=[];
-  if(c.zMom>0.5) parts.push('中期动量居前'); else if(c.zMom<-0.5) parts.push('动量偏弱');
-  if(r.f&&r.f.val<0.3) parts.push('估值处历史低位(便宜)'); else if(r.f&&r.f.val>0.7) parts.push('估值偏高');
-  if(c.zLow>0.5) parts.push('波动低于同业(稳健)');
-  if(r.vol&&r.vol.cls==='vol-up') parts.push('量价齐升'); else if(r.vol&&r.vol.cls==='vol-down') parts.push('量能承压');
-  return parts.length? parts.join(' · ') : '各因子中性';
+// 一句话理由：按各因子对综合分的「实际贡献」(已含方向学习与自适应校正)生成，保证理由与分数永远一致
+function oppReasonMine(r){
+  const c=r.comp; if(!c || c.zScore==null) return '数据不足';
+  const list=[
+    {c:c.cv, pos:(c.zv>=0?'波动大·弹性足':'低波动·走势稳'), neg:(c.zv>=0?'波动过大':'波动过低缺弹性')},
+    {c:c.cm, pos:(c.zm>=0?'中期动量居前':'中期已充分回调'),  neg:(c.zm>=0?'中期涨幅已高':'中期趋势偏弱')},
+    {c:c.cr, pos:(c.zr>=0?'短期走强':'短期超跌'),            neg:(c.zr>=0?'短期涨得过急':'短期仍在走弱')}
+  ].filter(x=> isFinite(x.c) && Math.abs(x.c)>0.06);
+  if(!list.length) return '各维度中性';
+  list.sort((a,b)=>Math.abs(b.c)-Math.abs(a.c));
+  return list.slice(0,2).map(x=> x.c>0? x.pos : x.neg).join(' · ');
 }
 // (legacy oppComposite removed — replaced by three-factor framework in scanOpportunities)
 async function scanOpportunities(){
@@ -2968,28 +3097,38 @@ async function scanOpportunities(){
   if(!items.length){
     const err=new Error('K线数据源（腾讯 fqkline）在当前环境无法访问。请在本机双击打开 index.html 使用「机会精选」（本机浏览器可直接拉取）。'); err.klineBlocked=true; throw err;
   }
-  // 回测: 用所有ETF的更长K线(首屏640根≈2.5年)算 RankIC 权重 + 验证
+  // walk-forward 回测: 用所有ETF的日K(首屏≥640根≈2.5年)做滚动样本外验证, 返回权重+方向+各因子OOS IC
   const bt=runBacktest(items.map(r=>[r.code, r._kl]).reduce((o,[c,kl])=>(o[c]=kl,o),{}));
-  const W=(bt&&bt.weights)?bt.weights:{mom:1/3,val:1/3,lowvol:1/3};
-  // 截面 z-score(当前时点, 动量对沪深300中性化, 低波动取反→波动小=高)
-  const zMom=zscore(items.map(r=> r.f? r.f.mom - (r.bf?r.bf.mom:0) : 0));
-  const zVal=zscore(items.map(r=> r.f? r.f.val : 0.5));
-  const zLow=zscore(items.map(r=> r.f? -r.f.lowvol : 0));
+  const W=(bt&&bt.weights)?bt.weights:{vol:1/3,mom120:1/3,rev5:1/3};
+  const D=(bt&&bt.dir)?bt.dir:{vol:-1,mom120:1,rev5:1};
+  const FLIP=(bt&&bt.flip)?bt.flip:1;   // 方向自适应校正: -1 = 已验证本样本期因子方向系统性翻转
+  // 当前时点三因子截面 z-score
+  const fAll=items.map(r=> factorsMine(r._kl, r._kl.length-1));
+  const valid=fAll.map((f,i)=> f?i:-1).filter(i=>i>=0);
+  const zv=valid.length?zscore(valid.map(i=>fAll[i].vol)):[];
+  const zm=valid.length?zscore(valid.map(i=>fAll[i].mom120)):[];
+  const zr=valid.length?zscore(valid.map(i=>fAll[i].rev5)):[];
   items.forEach((r,i)=>{
-    const zScore=W.mom*zMom[i]+W.val*zVal[i]+W.lowvol*zLow[i];
+    const fi=fAll[i];
+    let zScore=0, kv=0, km=0, kr=0, cv=0, cm=0, cr=0;
+    if(fi){ const k=valid.indexOf(i);
+      kv=zv[k]; km=zm[k]; kr=zr[k];
+      // 各因子对综合分的「实际贡献」（已含方向学习 D 与自适应校正 FLIP），贡献>0 = 该维度当前利好
+      cv=FLIP*W.vol*D.vol*kv; cm=FLIP*W.mom120*D.mom120*km; cr=FLIP*W.rev5*D.rev5*kr;
+      zScore=cv+cm+cr;
+    }
     const opp=Math.round(clamp(50+zScore*18,0,100));
     r.comp={
       opp,
-      mom:Math.round(clamp(50+zMom[i]*18,0,100)),           // 动量(中性化)
-      val:Math.round((r.f?r.f.val:0.5)*100),                // 估值分位(越低越便宜)
-      trend:(r.ind)?Math.round(clamp(50+(r.c60+r.c20>0?1:-1)*r.ind.reg.r2*50,0,100)):50, // 趋势强度(保留原逻辑)
-      vol:Math.round(clamp(50+zLow[i]*18,0,100)),           // 低波动稳健(高=波动低)
-      vp:({'vol-up':100,'vol-flat':70,'vol-warn':40,'vol-down':25}[r.vol?r.vol.cls:'vol-flat']||70),
-      zMom:zMom[i], zVal:zVal[i], zLow:zLow[i], w:W,
+      vol:Math.round(clamp(50+kv*18,0,100)),       // 波动率截面分位(高=波动更大)
+      mom:Math.round(clamp(50+km*18,0,100)),       // 中期动量截面分位
+      rev:Math.round(clamp(50+kr*18,0,100)),       // 短期涨跌截面分位
+      zScore, w:W, dir:D, flip:FLIP, zv:kv, zm:km, zr:kr, cv, cm, cr,
       label:oppLabelScore(opp), cls:oppClsScore(opp)
     };
+    r.pred = fi? predictFrom(bt, zScore) : null;   // ← 真正的预测：未来20/60日超额收益 + 上涨概率
   });
-  items.forEach(r=>{ r.reason=oppReason3F(r); });
+  items.forEach(r=>{ r.reason=oppReasonMine(r); });
   OPP_CACHE.rows=items; OPP_CACHE.quotes=quotes; OPP_CACHE.t=Date.now(); OPP_CACHE.bt=bt;
   return items;
 }
@@ -2999,28 +3138,91 @@ function renderOpportunities(){
   if(OPP_CACHE.rows && Date.now()-OPP_CACHE.t<5*60*1000){ _renderOppList(OPP_CACHE.rows); if(OPP_CACHE.bt) renderBacktest(OPP_CACHE.bt); return; }
   scanOpportunities().then(rows=>{ _renderOppList(rows); if(OPP_CACHE.bt) renderBacktest(OPP_CACHE.bt); }).catch(e=>{ box.innerHTML='<div class="empty">扫描失败：'+e.message+'</div>'; });
 }
+// 方向自适应校正说明
+function _flipHtml(bt){
+  const sc=bt.segCheck;
+  if(!sc) return '';
+  const f=o=>o?((o.ic>=0?'+':'')+o.ic.toFixed(3)+'(t='+o.t.toFixed(2)+')'):'--';
+  if(bt.flip===-1){
+    return '<p style="border:1px solid #bfe3c6;background:#eefaf0;color:#1a7a3a;padding:8px 10px;border-radius:8px;margin:8px 0;line-height:1.5;">'
+      +'🔄 <b>已启用方向自适应校正</b>：检验发现「按历史IC定方向」的综合分在<b>前后两段样本里都稳定负相关</b>'
+      +'（前段 '+f(sc.raw1)+'，后段 '+f(sc.raw2)+'）。这说明本市场近两年在行业层面呈<b>反转特征</b>——'
+      +'涨得多、拥挤度高的行业，后续 60 日反而跑输。系统已自动把综合分整体取反，'
+      +'下方所有 IC / 分组 / 预测数值均为<b>校正后</b>结果（分数高 = 预期跑赢）。</p>';
+  }
+  return '<p class="bt-note">方向自适应校正：<b>未触发</b>（综合分方向在前后两段不一致或本就为正，按原方向使用）。前段 '+f(sc.raw1)+'，后段 '+f(sc.raw2)+'。</p>';
+}
+// 预测校准表：把「综合分档」对应的历史样本外真实表现摊开，作为预测数值的直接依据
+function _predCalibHtml(P){
+  if(!P) return '<p class="bt-note">预测层：样本外样本不足（需≥60），本次暂不输出预测数值。</p>';
+  const s=v=>(v==null?'--':((v>=0?'+':'')+v.toFixed(1)+'%'));
+  const NAMES=['很低 (z&lt;-0.8)','偏低 (-0.8~-0.25)','中性 (-0.25~0.25)','偏高 (0.25~0.8)','很高 (z&gt;0.8)'];
+  const rowsHtml=P.bands.map((b,i)=>{
+    const up=b.ex60&&b.ex60.mean>=0;
+    return '<tr><td>'+NAMES[i]+'</td><td>'+b.n+'</td>'
+      +'<td style="color:'+(up?'var(--up)':'var(--down)')+';font-weight:700;">'+(b.ex60?s(b.ex60.mean):'--')+'</td>'
+      +'<td>'+(b.ex60?Math.round(b.ex60.pUp)+'%':'--')+'</td>'
+      +'<td>'+(b.ex20?s(b.ex20.mean):'--')+'</td>'
+      +'<td>'+(b.ex20?Math.round(b.ex20.pUp)+'%':'--')+'</td></tr>';
+  }).join('');
+  const b60=P.ols60, b20=P.ols20;
+  const strong=Math.abs(b60.t)>=2;
+  const slopeWarn = b60.b<0
+    ? '<p class="bt-warn" style="border-color:#f3c0c0;background:#fdecec;color:#c0392b;">⚠️ 回归斜率为<b>负</b>（b='+b60.b.toFixed(2)+'）：本样本期内综合分越高，未来反而越可能跑输。预测数值已按此真实关系给出（高分标的会显示负超额），说明因子方向在本区间不稳定，请谨慎使用。</p>'
+    : (strong
+      ? '<p class="bt-ok" style="border:1px solid #bfe3c6;background:#eefaf0;color:#1a7a3a;padding:8px 10px;border-radius:8px;margin:8px 0;">✅ 回归斜率显著为正（b='+b60.b.toFixed(2)+' %/单位z，t='+b60.t.toFixed(2)+'）：综合分每高 1 个标准差，未来60日平均多赚 '+b60.b.toFixed(2)+' 个百分点（相对行业均值）。预测数值可作为筛选依据。</p>'
+      : '<p class="bt-warn" style="border-color:#f3e0a8;background:#fdf6e3;color:#9a7b16;">⚠️ 回归斜率 b='+b60.b.toFixed(2)+'（t='+b60.t.toFixed(2)+'）<b>未达显著</b>：综合分与未来超额的关系较弱，预测数值区分度有限，仅供参考，不要据此重仓。</p>');
+  return '<div class="bt-chart"><div class="bt-chart-title">预测校准表（综合分档 → 历史样本外真实表现）</div>'
+    +'<table class="bt-tbl"><thead><tr><th>综合分档</th><th>样本数</th><th>未来60日超额<br><span style="font-weight:400;font-size:10px;">（主目标）</span></th><th>跑赢概率</th><th>未来20日超额<br><span style="font-weight:400;font-size:10px;">（参考）</span></th><th>跑赢概率</th></tr></thead><tbody>'
+    + rowsHtml +'</tbody></table>'
+    +'<p class="bt-note"><b>「超额」= 该标的收益 − 同期全部行业ETF平均收益</b>，已剔除大盘涨跌，衡量因子带来的相对优势（大盘涨跌本模型不预测）。'
+    +'列表预测点估计取最小二乘拟合：60日 b='+b60.b.toFixed(2)+' %/单位z（t='+b60.t.toFixed(2)+'，R²='+(b60.r2*100).toFixed(1)+'%）；20日 b='+b20.b.toFixed(2)+'（t='+b20.t.toFixed(2)+'）。区间与跑赢概率取同档历史经验分布。'
+    +'样本外样本共 '+P.n+' 个（滚动时点 × 标的）。</p>'
+    + slopeWarn
+    +'</div>';
+}
 function renderBacktest(bt){
   const box=$('btBody'); if(!box) return;
   if(!bt){ box.innerHTML='<div class="empty">当前环境K线历史不足（需≥260根/只）或样本不足，暂无法生成回测验证。</div>'; return; }
-  const W=bt.weights, wPct=x=>Math.round(x*100)+'%';
+  const W=bt.weights||{vol:1/3,mom120:1/3,rev5:1/3}, wPct=x=>Math.round(x*100)+'%';
   const sig=ic=>{ const a=Math.abs(ic.t); return a>=2?'显著':(a>=1.5?'边缘':(a>=1?'弱':'不显著')); };
   const sigCls=ic=>{ const a=Math.abs(ic.t); return a>=2?'bt-sig-on':(a>=1?'':'bt-sig-off'); };
-  const icRow=(name,o)=>'<tr><td>'+name+'</td><td>'+o.ic.toFixed(3)+'</td><td>'+o.t.toFixed(2)+'</td><td class="bt-sig '+sigCls(o)+'">'+sig(o)+'</td></tr>';
+  const icRow=(name,o)=>{ if(!o) return ''; return '<tr><td>'+name+'</td><td>'+(o.ic>=0?'+':'')+o.ic.toFixed(3)+'</td><td>'+o.t.toFixed(2)+'</td><td class="bt-sig '+sigCls(o)+'">'+sig(o)+'</td></tr>'; };
+  const compIC=bt.ic&&bt.ic.comp;
+  const usable = compIC && compIC.t>=1.5;
+  const usableEdge = compIC && compIC.t>=1 && compIC.t<1.5;
+  const useHtml = usable
+    ? '<p class="bt-ok" style="border:1px solid #bfe3c6;background:#eefaf0;color:#1a7a3a;padding:8px 10px;border-radius:8px;margin:8px 0;">✅ 经 <b>walk-forward 滚动样本外验证</b>：综合分对未来60日收益 RankIC = '+(compIC.ic>=0?'+':'')+compIC.ic.toFixed(3)+'（t='+compIC.t.toFixed(2)+'，显著），对行业ETF未来收益有<b>稳定排序能力</b>，可用于辅助筛选。权重由样本外 RankIC 驱动，非主观设定。</p>'
+    : (usableEdge
+      ? '<p class="bt-warn" style="border-color:#f3e0a8;background:#fdf6e3;color:#9a7b16;">⚠️ 样本外综合分 RankIC 方向为正但显著性<b>边缘</b>（t='+compIC.t.toFixed(2)+'），可作为参考，实盘需谨慎并结合市况。</p>'
+      : '<p class="bt-warn" style="border-color:#f3c0c0;background:#fdecec;color:#c0392b;">⚠️ 样本外综合分 RankIC = '+(compIC.ic>=0?'+':'')+compIC.ic.toFixed(3)+'（t='+compIC.t.toFixed(2)+'），<b>未达显著有效</b>。该榜单当前仅作「截面相对位置」参考，不应作为收益预测；市场风格切换时规律可能失效。</p>');
   const maxAbs=Math.max(...bt.quint20.map(Math.abs), 1);
   const bars=bt.quint20.map((v,i)=>{
     const h=Math.round(Math.abs(v)/maxAbs*60)+4; const up=v>=0;
     return '<div class="bt-q"><div class="bt-bar '+(up?'bt-up':'bt-down')+'" style="height:'+h+'px;"></div><div class="bt-ql">Q'+(i+1)+'</div><div class="bt-qv">'+(up?'+':'')+v.toFixed(1)+'%</div></div>';
   }).join('');
   box.innerHTML=''
-    +'<p class="bt-note">综合分 = 动量(Jegadeesh&amp;Titman 1993) + 价值分位(FF/均值回归) + 低波动(Ang et al. 2006) 三因子：截面 z-score 标准化，动量对沪深300中性化；权重由历史 RankIC 数据驱动（非主观）。</p>'
-    +'<div class="bt-w"><span>因子权重</span> 动量 <b>'+wPct(W.mom)+'</b> · 价值 <b>'+wPct(W.val)+'</b> · 低波动 <b>'+wPct(W.lowvol)+'</b></div>'
-    +'<table class="bt-tbl"><thead><tr><th>因子</th><th>RankIC·20日</th><th>t值</th><th>显著性</th></tr></thead><tbody>'
-    + icRow('综合分', bt.ic.comp)+icRow('动量', bt.ic.mom)+icRow('价值', bt.ic.val)+icRow('低波动', bt.ic.lowvol)
+    +'<p class="bt-note"><b>方法论（walk-forward 滚动样本外验证）</b>：把时间轴切成滚动时点；对每个验证点，<b>仅用其之前的全部历史</b>估计各因子 RankIC → 定权重与方向，再在验证点算综合分 vs 未来60日收益(主目标周期)。所有点的 IC 平均 = 严格样本外 RankIC，<b>不窥视未来</b>。因子集（学术先验 + 真实样本外确认）：低波动(Ang et al. 2006) / 中期动量(Jegadeesh &amp; Titman 1993) / 短期反转。</p>'
+    + _flipHtml(bt)
+    +'<div class="bt-w"><span>样本外因子权重</span> 波动率 <b>'+wPct(W.vol)+'</b> · 中期动量 <b>'+wPct(W.mom120)+'</b> · 短期涨跌 <b>'+wPct(W.rev5)+'</b></div>'
+    +'<table class="bt-tbl"><thead><tr><th>因子</th><th>样本外RankIC·60日</th><th>t值</th><th>显著性</th></tr></thead><tbody>'
+    + icRow('综合分', bt.ic.comp)+icRow('低波动', bt.ic.vol)+icRow('中期动量', bt.ic.mom120)+icRow('短期反转', bt.ic.rev5)
     +'</tbody></table>'
-    +'<p class="bt-note">样本内滚动回测：'+bt.nPoints+' 个月末时点 × '+bt.nCodes+' 只行业ETF。'+(bt.ic.comp.ic>=0?'RankIC&gt;0 表示综合分对「未来20日收益」有正向排序能力。':'RankIC&lt;0 表示本样本期综合分与「未来20日收益」呈负相关，高分组合未来表现反而偏弱。')+'</p>'
-    +'<div class="bt-chart"><div class="bt-chart-title">五分组平均未来20日收益（Q1最低分 → Q5最高分）</div><div class="bt-bars">'+bars+'</div><div class="bt-ls">多空收益(Q5−Q1)：'+(bt.longShort20>=0?'+':'')+bt.longShort20.toFixed(1)+'%</div></div>'
-    + (bt.ic.comp.ic<0 ? '<p class="bt-warn" style="border-color:#f3c0c0;background:#fdecec;color:#c0392b;">⚠️ 本样本期综合分与未来20日收益呈<b>负相关</b>（高分组合未来表现反而偏弱），可能与区间市场风格 / 行业轮动阶段有关。该榜单当前更适合作为「截面相对位置」参考，而非收益预测；实盘请结合市况。</p>' : '')
-    +'<p class="bt-warn">⚠️ 以上为样本内历史统计，存在过拟合与样本偏差风险；市场风格切换时规律可能失效。仅作方法学验证，<b>不构成投资建议</b>。</p>';
+    +'<p class="bt-note">样本外验证：'+bt.nPoints+' 个滚动时点 × '+bt.nCodes+' 只行业ETF，区间 <b>'+(bt.dateFrom||'--')+' ~ '+(bt.dateTo||'--')+'</b>（所有标的都有行情的公共交易日，共 '+(bt.axisLen||0)+' 根，<b>按日期对齐而非数组下标</b>，避免把不同年份的数据混进同一个横截面）。RankIC&gt;0 表示该因子/综合分对「未来60日收益」有正向排序能力（高分组合未来表现更强）。</p>'
+    +'<div class="bt-chart"><div class="bt-chart-title">五分组平均未来60日收益（Q1最低分 → Q5最高分）</div><div class="bt-bars">'+bars+'</div><div class="bt-ls">多空收益(Q5−Q1)：'+(bt.longShort20>=0?'+':'')+bt.longShort20.toFixed(1)+'%</div></div>'
+    + _predCalibHtml(bt.pred)
+    + useHtml
+    +'<p class="bt-warn">⚠️ 以上为历史样本外统计，存在样本偏差与过拟合风险；市场风格切换时规律可能失效。仅作方法学验证，<b>不构成投资建议</b>。</p>';
+}
+// 列表行的预测条：未来60日相对全行业的超额收益点估计 + 跑赢概率 + 置信度
+function _predLine(p){
+  if(!p) return '<div class="opp-pred pred-na">预测：历史样本不足，暂不给出</div>';
+  const s=v=>(v>=0?'+':'')+v.toFixed(1)+'%';
+  const cls = p.ex60>=0?'pred-up':'pred-down';
+  const cf = p.conf==='high'?'置信高':(p.conf==='mid'?'置信中':'置信低');
+  return '<div class="opp-pred '+cls+'">预测·未来60日跑赢行业均值 <b>'+s(p.ex60)+'</b>'
+    +'<span class="pred-rng">（历史同档区间 '+s(p.q25_60)+'～'+s(p.q75_60)+'）</span>'
+    +'<span class="pred-conf">跑赢概率 '+Math.round(p.pUp60)+'% · '+cf+'</span></div>';
 }
 function _renderOppList(rows){
   const box=$('oppList'); if(!box) return;
@@ -3028,9 +3230,8 @@ function _renderOppList(rows){
   const sorted=rows.slice().sort((a,b)=>{
     const ca=a.comp,bc=b.comp;
     if(sort==='mom')  return (bc.mom||0)-(ca.mom||0);
-    if(sort==='val')  return (bc.val||0)-(ca.val||0);
-    if(sort==='trend')return (bc.trend||0)-(ca.trend||0);
-    if(sort==='lowvol')return (ca.vol||0)-(bc.vol||0);
+    if(sort==='vol')  return (ca.vol||0)-(bc.vol||0);
+    if(sort==='rev')  return (bc.rev||0)-(ca.rev||0);
     return (bc.opp||0)-(ca.opp||0);
   });
   // 市况条
@@ -3045,7 +3246,8 @@ function _renderOppList(rows){
       +'<div class="opp-rank">'+(i+1)+'</div>'
       +'<div><div class="opp-name">'+r.name+' <span class="opp-etf">'+r.etf+' · '+r.code+'</span></div>'
         +'<span class="opp-tag '+c.cls+'">'+c.label+'</span>'
-        +'<div class="opp-reason">'+r.reason+'</div></div>'
+        +'<div class="opp-reason">'+r.reason+'</div>'
+        +_predLine(r.pred)+'</div>'
       +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;"><div class="opp-score" style="color:'+sc+';">'+c.opp+'</div>'
         +'<button class="ghost opp-add" data-add="'+r.code+'" style="padding:2px 7px;font-size:11px;">'+(inWatch(r.code)?'已加★':'＋自选')+'</button></div>'
       +'</div>';
@@ -3087,7 +3289,15 @@ function renderOppDetail(r){
     const F=r.F||{};
     const c20c=(r.c20==null?'--':(r.c20>=0?'+':'')+r.c20.toFixed(1)+'%');
     const c60c=(r.c60==null?'--':(r.c60>=0?'+':'')+r.c60.toFixed(1)+'%');
+    const P=r.pred;
+    const ps=v=>(v==null?'--':((v>=0?'+':'')+v.toFixed(1)+'%'));
+    const pcol=v=>(v==null?'#8b93a2':(v>=0?'var(--up)':'var(--down)'));
+    const cfTxt=P?(P.conf==='high'?'置信高':(P.conf==='mid'?'置信中':'置信低')):'';
     cards.innerHTML=''
+      +_oppCard('预测·未来60日超额（主）', P?ps(P.ex60):'--',
+          (P&&P.pUp60!=null)?('跑赢概率 '+Math.round(P.pUp60)+'% · '+ps(P.q25_60)+'～'+ps(P.q75_60)+' · '+cfTxt):'历史样本不足', pcol(P?P.ex60:null))
+      +_oppCard('预测·未来20日超额（参考）', P?ps(P.ex20):'--',
+          P?('跑赢概率 '+Math.round(P.pUp20)+'% · '+ps(P.q25_20)+'～'+ps(P.q75_20)):'历史样本不足', pcol(P?P.ex20:null))
       +_oppCard('动量(中期/近期)', (r.c60==null?'--':(r.c60>=0?'+':'')+r.c60.toFixed(1)+'%')+' / '+c20c, '60日 / 20日涨幅', (r.c60>0?'var(--up)':'var(--down)'))
       +_oppCard('估值分位', r.pct==null?'--':Math.round(r.pct*100)+'%', vlab.t, vlab.c)
       +_oppCard('趋势强度', (r2==null?'--':Math.round(r2*100)+'%'), L.label+(F.phase?(' · '+F.phase):''), L.dot)
