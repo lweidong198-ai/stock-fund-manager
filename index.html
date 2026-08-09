@@ -624,22 +624,22 @@
               </div>
             </div>
           </div>
-          <div id="marketFundDetail" style="display:none;">
-            <div class="detail-head">
-              <span class="big" id="mFName">--</span>
-              <span class="big" id="mFPrice">--</span>
-              <span id="mFChg">--</span>
-              <span class="meta" id="mFMeta"></span>
-              <span style="margin-left:auto;" class="meta" id="mFTime"></span>
-              <div class="sub" id="mFSub"></div>
-            </div>
-            <div class="chart-area">
-              <div class="toggles" id="mFundTg"><span class="tg on">净值走势</span></div>
-              <canvas id="mFundNav" height="380"></canvas>
-              <div class="hint" id="mFHint"></div>
-              <div class="chartstat" id="mFStat">图表：基金净值</div>
-            </div>
-          </div>
+        </div>
+      </div>
+      <div id="marketFundDetail" style="display:none;">
+        <div class="detail-head">
+          <span class="big" id="mFName">--</span>
+          <span class="big" id="mFPrice">--</span>
+          <span id="mFChg">--</span>
+          <span class="meta" id="mFMeta"></span>
+          <span style="margin-left:auto;" class="meta" id="mFTime"></span>
+          <div class="sub" id="mFSub"></div>
+        </div>
+        <div class="chart-area">
+          <div class="toggles" id="mFundTg"><span class="tg on">净值走势</span></div>
+          <canvas id="mFundNav" height="380"></canvas>
+          <div class="hint" id="mFHint"></div>
+          <div class="chartstat" id="mFStat">图表：基金净值</div>
         </div>
       </div>
     </div>
@@ -910,7 +910,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08l';  // l=行情看板点纯场外基金无数据时, 提示区直接给「一键看场内ETF走势」可点击入口(515050/510300/159915/161725, 走腾讯K线沙箱完全可用); 实测确认纯场外基金在https沙箱域名下东财反爬返回空壳f035=undef/腾讯不认/新浪CORS拦→任何免费源都拿不到, 非bug; 本机file://打开东财放行故有数据; k=点场外基金无数据明确提示; j=机会精选; i=点基金原地画净值
+const APP_VER = '2026-08-09m';  // m=修复#marketFundDetail错误嵌套在#detail内部导致行情看板点基金右侧空白; 东财空壳/反爬时也标记fundFail给出明确提示; l=行情看板点纯场外基金无数据时, 提示区直接给「一键看场内ETF走势」可点击入口(515050/510300/159915/161725, 走腾讯K线沙箱完全可用); 实测确认纯场外基金在https沙箱域名下东财反爬返回空壳f035=undef/腾讯不认/新浪CORS拦→任何免费源都拿不到, 非bug; 本机file://打开东财放行故有数据; k=点场外基金无数据明确提示; j=机会精选; i=点基金原地画净值
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -1463,6 +1463,7 @@ function _pumpFund(){
       _pumpFund();
     } else { // 全局变量不对 → 兜底 fetch 抓文本解析（CORS 可能失败 → 演示）
       clearTimeout(timeout);
+      (state.fundFail=state.fundFail||{})[code]=true; // 东财返回空壳/反爬，先标记不可达
       fetch(src).then(r=>r.text()).then(txt=>{ window.__fundRaw=window.__fundRaw||{}; window.__fundRaw[code]=txt; const fd=parseFundJs(txt,code); _fundBusy=false; _curFundCode=null; if(fd) applyFundData(code,fd); else useDemoFund(code); _pumpFund(); }).catch(()=>{ _fundBusy=false; _curFundCode=null; useDemoFund(code); _pumpFund(); });
     }
   };
@@ -3509,7 +3510,7 @@ function cleanseHold(){                          // 异步清洗历史被误存�
     }
   });
 }
-function delWatch(code){ state.watch=state.watch.filter(w=>w.code!==code); if(state.selected===code) state.selected=null; save(); renderWatch(); renderHoldSelect(); if(state.view==='analysis') populateAnSel(); if(!state.selected){ $('detail').style.display='none'; $('detailEmpty').style.display='block'; } }
+function delWatch(code){ state.watch=state.watch.filter(w=>w.code!==code); if(state.selected===code) state.selected=null; save(); renderWatch(); renderHoldSelect(); if(state.view==='analysis') populateAnSel(); if(!state.selected){ $('detail').style.display='none'; $('detailEmpty').style.display='block'; hideMarketFund(); } }
 function selectCode(code){
   state.selected=code;
   const w=state.watch.find(x=>x.code===code);
@@ -3542,7 +3543,7 @@ $('btnDemo').onclick=()=>{
   [['sh600519','stock'],['sz300750','stock'],['sh510300','stock'],['hk00700','stock'],['000001','fund']].forEach(([c,k])=>{ if(!state.watch.some(w=>w.code===c)) state.watch.push({code:c,kind:k}); });
   save(); fundCodesToLoad().forEach(c=>loadFund(c)); refreshQuotes(); renderWatch(); renderHoldSelect();
 };
-$('btnClear').onclick=()=>{ if(confirm('清空全部自选？')){ state.watch=[]; state.selected=null; save(); renderWatch(); renderHoldSelect(); $('detail').style.display='none'; $('detailEmpty').style.display='block'; } };
+$('btnClear').onclick=()=>{ if(confirm('清空全部自选？')){ state.watch=[]; state.selected=null; save(); renderWatch(); renderHoldSelect(); $('detail').style.display='none'; $('detailEmpty').style.display='block'; hideMarketFund(); } };
 async function addHold(raw, shares, cost){
   raw=String(raw||"").trim();
   if(!raw||!(shares>0)||!(cost>0)){ alert('请填代码、数量与成本价'); return; }
