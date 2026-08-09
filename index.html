@@ -599,6 +599,22 @@
               </div>
             </div>
           </div>
+          <div id="marketFundDetail" style="display:none;">
+            <div class="detail-head">
+              <span class="big" id="mFName">--</span>
+              <span class="big" id="mFPrice">--</span>
+              <span id="mFChg">--</span>
+              <span class="meta" id="mFMeta"></span>
+              <span style="margin-left:auto;" class="meta" id="mFTime"></span>
+              <div class="sub" id="mFSub"></div>
+            </div>
+            <div class="chart-area">
+              <div class="toggles" id="mFundTg"><span class="tg on">净值走势</span></div>
+              <canvas id="mFundNav" height="380"></canvas>
+              <div class="hint" id="mFHint"></div>
+              <div class="chartstat" id="mFStat">图表：基金净值</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -865,7 +881,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08h';  // h=删除行情看板自选卡顶部"📗 红涨绿跌…点任意一行看走势图; 自选列表可独立滚动…"说明文字(g版已用sticky表头+独立滚动实现, 说明冗余)
+const APP_VER = '2026-08-08i';  // i=行情看板点基金原地画净值(不跳基金工作区): 新增#marketFundDetail区块+showMarketFund/hideMarketFund; selectCode/goView('market')放开"基金必改股票"限制; applyFundData/useDemoFund/resize按当前视图智能重绘(market视图画mFundNav)
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -1358,7 +1374,7 @@ function parseFundJs(text, code){
 function applyFundData(code, fd){
   if(!fd) return;
   state.fundData[code]=fd;
-  if(state.selected===code) renderFund();
+  if(state.selected===code){ if(state.view==='market') showMarketFund(code); else renderFund(); }
   renderWatch(); renderHold();
   if(state.view==='fundAnalysis' && state.faCode===code) renderFundAnalysis();
   setDemo(false); setDataStatus('ok');
@@ -1366,7 +1382,7 @@ function applyFundData(code, fd){
 function useDemoFund(code){
   const fd=demoFund(code);
   state.fundData[code]=fd;
-  if(state.selected===code) renderFund();
+  if(state.selected===code){ if(state.view==='market') showMarketFund(code); else renderFund(); }
   renderWatch(); renderHold();
   if(state.view==='fundAnalysis' && state.faCode===code) renderFundAnalysis();
   setDemo(true); setDataStatus('demo');
@@ -2235,11 +2251,16 @@ function showView(v, keepNav){
 /* 统一入口：点导航/首页卡片都走这里。智能保证"当前视图能展示当前选中的资产"，避免空白与层次冲突 */
 function goView(v){
   if(v==='market'){
-    const cur=state.watch.find(x=>x.code===state.selected);
-    if(!cur || cur.kind==='fund'){ const st=state.watch.find(x=>x.kind==='stock'); if(st) state.selected=st.code; }
+    // 行情看板同时支持股票(K线)与基金(净值)，不再强制把基金选中改成股票
     showView('market');
-    if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetail();
-    else { $('detailEmpty').style.display='block'; $('detail').style.display='none'; if($('quoteCard')) $('quoteCard').style.display='none'; }
+    const cur=state.watch.find(x=>x.code===state.selected);
+    if(state.selected && cur && cur.kind==='fund'){
+      showMarketFund(state.selected);
+    } else if(state.selected && cur && cur.kind!=='fund'){
+      renderDetail();
+    } else {
+      $('detailEmpty').style.display='block'; $('detail').style.display='none'; if($('quoteCard')) $('quoteCard').style.display='none';
+    }
     return;
   }
   if(v==='fund'){
@@ -2989,6 +3010,24 @@ function showFundDetail(code){
   drawNav('fundCanvas', fd);
   $('fundHint').textContent='累计净值：'+fmt(fd.cum.length?fd.cum[fd.cum.length-1].nav:0,4)+' · 共 '+fd.nav.length+' 条净值记录';
 }
+/* 行情看板内直接展示基金净值（点基金行不跳到基金工作区，原地画净值曲线） */
+function showMarketFund(code){
+  const w=state.watch.find(x=>x.code===code);
+  if(!w || w.kind!=='fund'){ hideMarketFund(); if(state.view==='market') renderDetail(); return; }
+  const fd=state.fundData[code];
+  $('detailEmpty').style.display='none';
+  $('detail').style.display='none';
+  const mfd=$('marketFundDetail'); if(!mfd) return; mfd.style.display='block';
+  if(!fd){ $('mFName').textContent=code; $('mFPrice').textContent='--'; $('mFChg').textContent='--'; $('mFMeta').textContent='场外基金 · 单位净值'; $('mFTime').textContent=''; $('mFHint').textContent='净值加载中…（若长时间无数据，该源可能需要本地服务器环境）'; return; }
+  $('mFName').textContent=fd.name||code;
+  $('mFPrice').textContent=fmt(fd.latest,4);
+  const chg=fd.latest-fd.prev, cp=fd.prev?chg/fd.prev*100:0; const cEl=$('mFChg'); cEl.textContent=pct(cp)+' ('+fmt(chg,4)+')'; cEl.className=cls(cp);
+  $('mFMeta').textContent='场外基金 · 单位净值';
+  $('mFTime').textContent=fd.nav.length? '截至 '+new Date(fd.nav[fd.nav.length-1].t).toLocaleDateString('zh-CN'):'';
+  drawNav('mFundNav', fd);
+  $('mFHint').textContent='累计净值：'+fmt(fd.cum.length?fd.cum[fd.cum.length-1].nav:0,4)+' · 共 '+fd.nav.length+' 条净值记录';
+}
+function hideMarketFund(){ const mfd=$('marketFundDetail'); if(mfd) mfd.style.display='none'; }
 
 /* ============ 自选列表 ============ */
 function renderWatch(){
@@ -3229,12 +3268,17 @@ function selectCode(code){
   if(v==='analysis'){ state.anaMode='single'; renderAnalysis(); return; }  // 切到新标的→退出组合模式，回到单只研判
   // 基金深度分析用独立输入框，不抢当前视图
   if(v==='fundAnalysis'){ return; }
-  // 行情看板只看股票/ETF，点到基金就智能切到基金净值；基金净值同理
+  // 行情看板同时支持股票(K线)与基金(净值)：点基金原地画净值，不跳到基金工作区
   if(isFund){
-    if(v!=='fund') showView('fund');
-    renderFund();
+    if(v==='market'){
+      showMarketFund(code);          // 行情看板内直接看净值，不切走
+    } else {
+      if(v!=='fund') showView('fund');
+      renderFund();
+    }
   } else {
     if(v!=='market') showView('market');
+    hideMarketFund();
     renderDetail();
   }
 }
@@ -3516,7 +3560,7 @@ document.querySelectorAll('.navitem').forEach(t=>t.onclick=()=>goView(t.dataset.
 let timer=null;
 function startTimer(){ if(timer)return; timer=setInterval(refreshQuotes, CFG.refreshMs); }
 function stopTimer(){ if(timer){clearInterval(timer);timer=null;} }
-window.addEventListener('resize',()=>{ if(state.selected){ const w=state.watch.find(x=>x.code===state.selected); if(w&&w.kind==='fund') renderFund(); else renderDetail(); } });
+window.addEventListener('resize',()=>{ if(state.selected){ const w=state.watch.find(x=>x.code===state.selected); if(w&&w.kind==='fund'){ if(state.view==='market') showMarketFund(state.selected); else renderFund(); } else renderDetail(); } });
 
 /* ============ 基金深度分析（净值统计·风险体检） ============ */
 function pctile(arr,q){ if(!arr.length) return 0; const s=arr.slice().sort((a,b)=>a-b); const idx=(s.length-1)*q; const lo=Math.floor(idx),hi=Math.ceil(idx); if(lo===hi) return s[lo]; return s[lo]+(s[hi]-s[lo])*(idx-lo); }
