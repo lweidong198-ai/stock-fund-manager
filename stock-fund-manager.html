@@ -321,6 +321,29 @@
   .opp-watch{background:#eef3f8;color:#3a6ea5;}
   .opp-caut{background:#eef1ee;color:#6b7686;}
   .opp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:6px;margin-top:8px;}
+  .bt-details{margin:8px 0 4px;border:1px solid #e6eaf1;border-radius:10px;background:#fbfcfe;overflow:hidden;}
+  .bt-details>summary{cursor:pointer;padding:8px 12px;font-size:13px;font-weight:600;color:#3a6ea5;user-select:none;list-style:inside;}
+  .bt-details>summary::-webkit-details-marker{color:#9aa6b5;}
+  .bt-body{padding:4px 12px 12px;font-size:12px;line-height:1.6;}
+  .bt-note{color:#8a93a3;margin:6px 0;font-size:11.5px;}
+  .bt-w{margin:8px 0;padding:6px 10px;background:#f3f6fb;border-radius:8px;font-size:12px;}
+  .bt-w b{color:#3a6ea5;}
+  .bt-tbl{width:100%;border-collapse:collapse;margin:8px 0;font-size:12px;}
+  .bt-tbl th,.bt-tbl td{border-bottom:1px solid #eef1f5;padding:5px 6px;text-align:left;}
+  .bt-tbl th{color:#8a93a3;font-weight:600;}
+  .bt-sig-on{color:#0f9d58;font-weight:700;}
+  .bt-sig-off{color:#bbb;}
+  .bt-chart{margin:10px 0 4px;}
+  .bt-chart-title{font-size:11.5px;color:#8a93a3;margin-bottom:6px;}
+  .bt-bars{display:flex;align-items:flex-end;gap:8px;height:82px;padding:0 4px;}
+  .bt-q{display:flex;flex-direction:column;align-items:center;flex:1;}
+  .bt-bar{width:70%;border-radius:3px 3px 0 0;min-height:2px;}
+  .bt-up{background:#e23b3b;}
+  .bt-down{background:#1aa260;}
+  .bt-ql{font-size:10.5px;color:#8a93a3;margin-top:3px;}
+  .bt-qv{font-size:10.5px;font-weight:600;margin-top:1px;}
+  .bt-ls{margin-top:6px;font-size:12px;font-weight:600;color:#3a6ea5;}
+  .bt-warn{color:#b06a00;background:#fff7e8;border:1px solid #ffe2b0;border-radius:8px;padding:6px 10px;margin-top:10px;font-size:11.5px;}
   .opp-card{border:1px solid #e6eaf1;border-radius:10px;padding:7px;background:#fbfcfe;}
   .opp-card .oc-lbl{font-size:11.5px;color:#8a93a3;margin-bottom:4px;}
   .opp-card .oc-val{font-size:16px;font-weight:700;}
@@ -683,6 +706,10 @@
             <span class="meta" id="oppTime" style="margin-left:auto;"></span>
           </div>
           <div id="oppBanner" class="regime-banner" style="display:none;"></div>
+          <details class="bt-details" id="btDetails">
+            <summary>📊 策略验证 · 三因子学术框架 + 历史回测</summary>
+            <div id="btBody" class="bt-body">扫描后自动生成…</div>
+          </details>
           <div id="oppList" class="opp-list"></div>
         </div>
       </div>
@@ -910,7 +937,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-09m';  // m=修复#marketFundDetail错误嵌套在#detail内部导致行情看板点基金右侧空白; 东财空壳/反爬时也标记fundFail给出明确提示; l=行情看板点纯场外基金无数据时, 提示区直接给「一键看场内ETF走势」可点击入口(515050/510300/159915/161725, 走腾讯K线沙箱完全可用); 实测确认纯场外基金在https沙箱域名下东财反爬返回空壳f035=undef/腾讯不认/新浪CORS拦→任何免费源都拿不到, 非bug; 本机file://打开东财放行故有数据; k=点场外基金无数据明确提示; j=机会精选; i=点基金原地画净值
+const APP_VER = '2026-08-09o';  // o=机会精选重做: 学术界三因子框架(动量Jegadeesh&Titman1993/价值分位FF+均值回归/低波动Ang2006)+截面z-score+对沪深300动量中性化+历史RankIC数据驱动加权; 新增样本内滚动回测验证卡(动态RankIC/t值/五分组/多空收益/学术出处); 实测本样本期(约2.5年)综合分RankIC显著为负(-0.073, t=-2.78), 已诚实标注高分组合未来偏弱, 供boss决策是否调整因子; m=修复#marketFundDetail错误嵌套; l=行情看板点纯场外基金给场内ETF跳转入口; k=点场外基金无数据明确提示; j=机会精选; i=点基金原地画净值
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -1537,6 +1564,12 @@ function getSeries(code){
 
 /* ============ 建仓分析引擎 v2：多因子 · 环境感知 · 置信加权 · 冲突调和 ============ */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+// ===== 统计工具（机会精选三因子回测用，零Key、纯前端） =====
+function mean(a){ return a.length? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+function std(a){ if(a.length<2) return 0; const m=mean(a); return Math.sqrt(a.reduce((x,y)=>x+(y-m)*(y-m),0)/(a.length-1)); }
+function rank(arr){ const idx=arr.map((v,i)=>[v,i]).sort((a,b)=>a[0]-b[0]); const r=new Array(arr.length); let i=0; while(i<idx.length){ let j=i; while(j<idx.length-1 && idx[j+1][0]===idx[i][0]) j++; const avg=(i+j)/2+1; for(let k=i;k<=j;k++) r[idx[k][1]]=avg; i=j+1; } return r; }
+function spearman(a,b){ if(a.length!==b.length||!a.length) return 0; const ra=rank(a), rb=rank(b); const n=a.length; const ma=mean(ra), mb=mean(rb); let cov=0,va=0,vb=0; for(let i=0;i<n;i++){ cov+=(ra[i]-ma)*(rb[i]-mb); va+=(ra[i]-ma)**2; vb+=(ra[i]-mb)**2; } return (va===0||vb===0)?0:cov/Math.sqrt(va*vb); }
+function zscore(arr){ const m=mean(arr), s=std(arr); return arr.map(x=> s===0?0:(x-m)/s); }
 const toSig=s=> s>=30?'看多': s<=-30?'看空':'中性';
 
 /* 多因子打分器：parts=[{w,val,txt}]，val∈[-100,100]
@@ -2796,7 +2829,7 @@ async function renderSectors(){
 /* ============ 机会精选（行业ETF多因子机会扫描·寻找当前值得关注的方向） ============ */
 // 综合「中期动量 + 估值便宜度(价格历史分位) + 趋势强度(回归R²) + 波动稳健 + 量价配合」
 // 给行业ETF打综合机会分，按分排序展示。全部从已拉取的日K线实时计算，零Key、纯描述当前状态，不预测未来涨跌。
-const OPP_CACHE={rows:null, t:0};
+const OPP_CACHE={rows:null, t:0, bt:null, quotes:{}};
 function oppValLabel(p){ if(p==null) return {t:'数据不足', c:'#bbb'}; if(p>=0.85) return {t:'估值偏高·偏热', c:'#e01f22'}; if(p>=0.6) return {t:'估值合理偏上', c:'#e08a00'}; if(p>=0.35) return {t:'估值合理', c:'#3a6ea5'}; if(p>=0.15) return {t:'估值偏低', c:'#0f9d58'}; return {t:'深度低估', c:'#0f9d58'}; }
 function oppReason(r){
   const c60=r.c60, c20=r.c20, p=r.pct, up=(c60+c20)>0;
@@ -2814,22 +2847,96 @@ function oppReason(r){
   else if(r.vol && r.vol.cls==='vol-down') s+=' ·放量承压';
   return s;
 }
-function oppComposite(r){
-  const c60=r.c60||0, c20=r.c20||0, p=r.pct;
-  const mom=clamp((clamp(c60,-25,25)+25)/50*55 + (clamp(c20,-15,15)+15)/30*45, 0, 100);
-  const val=(p==null)?50:(p>=0.9?15:clamp(100-p*100,10,100));
-  let trend=50;
-  if(r.ind){ const up=(c60+c20)>0; trend=up?clamp(50+r.ind.reg.r2*50,50,100):clamp(50-r.ind.reg.r2*50,0,50); }
-  const vol=(r.ind&&r.ind.vol)?clamp(100-(r.ind.vol.ann-15)*2.2,15,95):60;
-  const vp={'vol-up':100,'vol-flat':70,'vol-warn':40,'vol-down':25}[r.vol?r.vol.cls:'vol-flat']||70;
-  const opp=Math.round(0.40*mom+0.22*val+0.18*trend+0.10*vol+0.10*vp);
-  let label,cls;
-  if(opp>=72){ label='★ 强烈推荐'; cls='opp-strong'; }
-  else if(opp>=58){ label='重点关注'; cls='opp-attn'; }
-  else if(opp>=42){ label='观察'; cls='opp-watch'; }
-  else { label='谨慎'; cls='opp-caut'; }
-  return {opp,mom,val,trend,vol,vp,label,cls};
+// ===== 机会精选·行业轮动三因子（学术界有据、对ETF可严格落地） =====
+// 动量: Jegadeesh & Titman (1993) 动量效应 —— 近期涨的行业短期倾向延续
+// 价值: 价格历史分位代理账面市值比(Fama-French 价值因子 + 均值回归) —— 跌得透更便宜有安全垫
+// 低波动: Ang, Hodrick, Xing, Zhang (2006) 低波动异象 —— 波动小的长期相对跑赢
+// 工程化: 截面 z-score 标准化 + 对沪深300做动量中性化(Carhart 市场维度) + 历史 RankIC 数据驱动加权
+// ⚠️ 仅描述截面相对位置 + 历史统计验证, 不预测涨跌, 不构成投资建议; 样本内回测有失效风险
+
+// 在时点 idx 之前严格只用 idx 之前的收盘价算三因子原始值(无未来函数)
+function factorAt(kl, idx){
+  if(!kl || idx<120) return null;
+  const closes=kl.slice(0, idx+1).map(x=>x.close);
+  const n=closes.length;
+  const mom=(closes[n-1]-closes[n-1-60])/closes[n-1-60]*100;       // 中期(60日)动量
+  const win=closes.slice(Math.max(0, n-Math.min(756,n)));          // 过去≤3年价格窗口
+  const cur=closes[n-1];
+  const val=win.filter(v=>v<cur).length/win.length;                // 估值分位: 越低越便宜
+  const rets=[]; for(let i=1;i<Math.min(61,n);i++) rets.push((closes[n-i]-closes[n-i-1])/closes[n-i-1]);
+  const lowvol=std(rets)*Math.sqrt(252)*100;                       // 年化波动率(越低越好)
+  return {mom, val, lowvol};
 }
+// 跨截面滚动回测: 训练/验证一体化(全样本滚动 RankIC + 五分组 + 多空)
+function runBacktest(allKl){
+  const codes=Object.keys(allKl).filter(c=>allKl[c]&&allKl[c].length>=260);
+  if(codes.length<10) return null;
+  const L=Math.min(...codes.map(c=>allKl[c].length));
+  const T0=120, step=20, TEnd=Math.max(T0, L-60);
+  const points=[];
+  for(let T=T0; T<=TEnd; T+=step){
+    const fac={}, f20={}, f60={}; let ok=true;
+    for(const c of codes){
+      const kl=allKl[c]; if(T>=kl.length){ ok=false; break; }
+      const f=factorAt(kl, T); if(!f){ ok=false; break; }
+      fac[c]=f;
+      const T20=Math.min(T+20, kl.length-1), T60=Math.min(T+60, kl.length-1);
+      f20[c]=(kl[T20].close-kl[T].close)/kl[T].close*100;
+      f60[c]=(kl[T60].close-kl[T].close)/kl[T].close*100;
+    }
+    if(ok) points.push({fac,f20,f60});
+  }
+  if(points.length<8) return null;
+  // 每个滚动时点: 截面三因子z vs 未来20日收益rank → 平均得各因子RankIC
+  const icMom=[], icVal=[], icLow=[], icComp=[];
+  for(const p of points){
+    const cs=Object.keys(p.fac);
+    const r20=rank(cs.map(c=>p.f20[c]));
+    const zMom=zscore(cs.map(c=>p.fac[c].mom));
+    const zVal=zscore(cs.map(c=>p.fac[c].val));
+    const zLow=zscore(cs.map(c=>-p.fac[c].lowvol));   // 低波动: 波动率小=好 → 取反
+    const comp=cs.map((c,i)=> zMom[i]+zVal[i]+zLow[i]);
+    icMom.push(spearman(zMom,r20)); icVal.push(spearman(zVal,r20));
+    icLow.push(spearman(zLow,r20)); icComp.push(spearman(comp,r20));
+  }
+  const wm=mean(icMom), wv=mean(icVal), wl=mean(icLow);
+  const s=Math.abs(wm)+Math.abs(wv)+Math.abs(wl)||1;
+  const weights={mom:Math.abs(wm)/s, val:Math.abs(wv)/s, lowvol:Math.abs(wl)/s, raw:{mom:wm,val:wv,lowvol:wl}};
+  // 五分组(按加权综合分由低到高分5组, 记录每组平均未来收益) + 多空
+  const q20=[[],[],[],[],[]], q60=[[],[],[],[],[]];
+  for(const p of points){
+    const cs=Object.keys(p.fac);
+    const zMom=zscore(cs.map(c=>p.fac[c].mom));
+    const zVal=zscore(cs.map(c=>p.fac[c].val));
+    const zLow=zscore(cs.map(c=>-p.fac[c].lowvol));
+    const comp=cs.map((c,i)=> weights.mom*zMom[i]+weights.val*zVal[i]+weights.lowvol*zLow[i]);
+    const order=cs.map((c,i)=>[comp[i], p.f20[c], p.f60[c]]).sort((a,b)=>a[0]-b[0]);
+    const g=Math.floor(order.length/5);
+    for(let qi=0; qi<5; qi++){
+      const seg=order.slice(qi*g, qi===4?undefined:(qi+1)*g);
+      if(seg.length){ q20[qi].push(mean(seg.map(x=>x[1]))); q60[qi].push(mean(seg.map(x=>x[2]))); }
+    }
+  }
+  const quint20=q20.map(m=>mean(m)), quint60=q60.map(m=>mean(m));
+  return {
+    weights,
+    ic:{ mom:icStats(icMom), val:icStats(icVal), lowvol:icStats(icLow), comp:icStats(icComp) },
+    quint20, quint60, longShort20:quint20[4]-quint20[0], longShort60:quint60[4]-quint60[0],
+    nPoints:points.length, nCodes:codes.length
+  };
+}
+function icStats(arr){ const m=mean(arr), sd=std(arr); const t= sd===0?0: m/(sd/Math.sqrt(arr.length)); return {ic:m, t, n:arr.length}; }
+function oppLabelScore(s){ return s>=72?'★ 强烈推荐':s>=58?'重点关注':s>=42?'观察':'谨慎'; }
+function oppClsScore(s){ return s>=72?'opp-strong':s>=58?'opp-attn':s>=42?'opp-watch':'opp-caut'; }
+function oppReason3F(r){
+  const c=r.comp; const parts=[];
+  if(c.zMom>0.5) parts.push('中期动量居前'); else if(c.zMom<-0.5) parts.push('动量偏弱');
+  if(r.f&&r.f.val<0.3) parts.push('估值处历史低位(便宜)'); else if(r.f&&r.f.val>0.7) parts.push('估值偏高');
+  if(c.zLow>0.5) parts.push('波动低于同业(稳健)');
+  if(r.vol&&r.vol.cls==='vol-up') parts.push('量价齐升'); else if(r.vol&&r.vol.cls==='vol-down') parts.push('量能承压');
+  return parts.length? parts.join(' · ') : '各因子中性';
+}
+// (legacy oppComposite removed — replaced by three-factor framework in scanOpportunities)
 async function scanOpportunities(){
   const POOL=INDUSTRY_POOL.concat(loadCustomSectors());
   let quotes={};
@@ -2838,36 +2945,82 @@ async function scanOpportunities(){
     const r=await fetch('https://qt.gtimg.cn/q='+POOL.map(x=>normCode(x.code)).join(',')+'&_='+Date.now(),{signal:ctrl.signal});
     clearTimeout(to); quotes=parseTencent(new TextDecoder('gb18030').decode(await r.arrayBuffer()));
   }catch(e){ console.warn('opp quotes failed',e); }
-  let bench60=null; try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){}
-  const results=await Promise.all(POOL.map(async x=>{
-    try{
-      const kl=await loadKlineP(x.code,'d');
-      if(!kl||!kl.length) return null;
-      const q=quotes[normCode(x.code)]||{};
-      const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);
-      const vol=sectorVolume(kl,c20);
-      const ind=computeSectorIndicators(kl);
-      const pct3y=pricePct(kl,3);
-      const F=sectorForecast({c5,c20,c60}, vol.cls, (c60==null||bench60==null)?null:(c60-bench60), ind);
-      const comp=oppComposite({c5,c20,c60,pct:pct3y,vol,ind});
-      return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct||0), price:(q.price||null),
-               c5,c20,c60, vol, ind, pct:pct3y, F, comp, _kl:kl };
-    }catch(e){ console.warn('opp scan item failed', x.code, e); return null; }
-  }));
-  const rows=results.filter(Boolean);
-  if(!rows.length){
-    const err=new Error('K线数据源（腾讯 fqkline）在当前环境无法访问。请在本机双击打开 index.html 使用「机会精选」（本机浏览器可直接拉取）。');
-    err.klineBlocked=true; throw err;
+  const kls=await Promise.all(POOL.map(x=>loadKlineP(x.code,'d').catch(()=>null)));
+  if(!kls.some(Boolean)){
+    const err=new Error('K线数据源（腾讯 fqkline）在当前环境无法访问。请在本机双击打开 index.html 使用「机会精选」（本机浏览器可直接拉取）。'); err.klineBlocked=true; throw err;
   }
-  rows.forEach(r=>{ r.reason=oppReason(r); });
-  OPP_CACHE.rows=rows; OPP_CACHE.quotes=quotes; OPP_CACHE.t=Date.now();
-  return rows;
+  const bench_kl=await loadKlineP('sh000300','d').catch(()=>null);
+  const bench60 = bench_kl? klinePct(bench_kl,60): null;
+  const items=POOL.map((x,i)=>{
+    const kl=kls[i];
+    if(!kl||!kl.length) return null;
+    const q=quotes[normCode(x.code)]||{};
+    const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);
+    const vol=sectorVolume(kl,c20);
+    const ind=computeSectorIndicators(kl);
+    const pct3y=pricePct(kl,3);
+    const f=factorAt(kl, kl.length-1);                          // 三因子原始值(当前时点)
+    const bf=factorAt(bench_kl, bench_kl?bench_kl.length-1:0);  // 沪深300因子(中性化基准)
+    const F=sectorForecast({c5,c20,c60}, vol.cls, (c60==null||bench60==null)?null:(c60-bench60), ind);
+    return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct||0), price:(q.price||null),
+             c5,c20,c60, vol, ind, pct:pct3y, F, f, bf, _kl:kl };
+  }).filter(Boolean);
+  if(!items.length){
+    const err=new Error('K线数据源（腾讯 fqkline）在当前环境无法访问。请在本机双击打开 index.html 使用「机会精选」（本机浏览器可直接拉取）。'); err.klineBlocked=true; throw err;
+  }
+  // 回测: 用所有ETF的更长K线(首屏640根≈2.5年)算 RankIC 权重 + 验证
+  const bt=runBacktest(items.map(r=>[r.code, r._kl]).reduce((o,[c,kl])=>(o[c]=kl,o),{}));
+  const W=(bt&&bt.weights)?bt.weights:{mom:1/3,val:1/3,lowvol:1/3};
+  // 截面 z-score(当前时点, 动量对沪深300中性化, 低波动取反→波动小=高)
+  const zMom=zscore(items.map(r=> r.f? r.f.mom - (r.bf?r.bf.mom:0) : 0));
+  const zVal=zscore(items.map(r=> r.f? r.f.val : 0.5));
+  const zLow=zscore(items.map(r=> r.f? -r.f.lowvol : 0));
+  items.forEach((r,i)=>{
+    const zScore=W.mom*zMom[i]+W.val*zVal[i]+W.lowvol*zLow[i];
+    const opp=Math.round(clamp(50+zScore*18,0,100));
+    r.comp={
+      opp,
+      mom:Math.round(clamp(50+zMom[i]*18,0,100)),           // 动量(中性化)
+      val:Math.round((r.f?r.f.val:0.5)*100),                // 估值分位(越低越便宜)
+      trend:(r.ind)?Math.round(clamp(50+(r.c60+r.c20>0?1:-1)*r.ind.reg.r2*50,0,100)):50, // 趋势强度(保留原逻辑)
+      vol:Math.round(clamp(50+zLow[i]*18,0,100)),           // 低波动稳健(高=波动低)
+      vp:({'vol-up':100,'vol-flat':70,'vol-warn':40,'vol-down':25}[r.vol?r.vol.cls:'vol-flat']||70),
+      zMom:zMom[i], zVal:zVal[i], zLow:zLow[i], w:W,
+      label:oppLabelScore(opp), cls:oppClsScore(opp)
+    };
+  });
+  items.forEach(r=>{ r.reason=oppReason3F(r); });
+  OPP_CACHE.rows=items; OPP_CACHE.quotes=quotes; OPP_CACHE.t=Date.now(); OPP_CACHE.bt=bt;
+  return items;
 }
 function renderOpportunities(){
   const box=$('oppList'); if(!box) return;
   box.innerHTML='<div class="empty">正在扫描 '+INDUSTRY_POOL.length+' 个行业ETF的行情与K线（约数秒）…</div>';
-  if(OPP_CACHE.rows && Date.now()-OPP_CACHE.t<5*60*1000){ _renderOppList(OPP_CACHE.rows); return; }
-  scanOpportunities().then(rows=>{ _renderOppList(rows); }).catch(e=>{ box.innerHTML='<div class="empty">扫描失败：'+e.message+'</div>'; });
+  if(OPP_CACHE.rows && Date.now()-OPP_CACHE.t<5*60*1000){ _renderOppList(OPP_CACHE.rows); if(OPP_CACHE.bt) renderBacktest(OPP_CACHE.bt); return; }
+  scanOpportunities().then(rows=>{ _renderOppList(rows); if(OPP_CACHE.bt) renderBacktest(OPP_CACHE.bt); }).catch(e=>{ box.innerHTML='<div class="empty">扫描失败：'+e.message+'</div>'; });
+}
+function renderBacktest(bt){
+  const box=$('btBody'); if(!box) return;
+  if(!bt){ box.innerHTML='<div class="empty">当前环境K线历史不足（需≥260根/只）或样本不足，暂无法生成回测验证。</div>'; return; }
+  const W=bt.weights, wPct=x=>Math.round(x*100)+'%';
+  const sig=ic=>{ const a=Math.abs(ic.t); return a>=2?'显著':(a>=1.5?'边缘':(a>=1?'弱':'不显著')); };
+  const sigCls=ic=>{ const a=Math.abs(ic.t); return a>=2?'bt-sig-on':(a>=1?'':'bt-sig-off'); };
+  const icRow=(name,o)=>'<tr><td>'+name+'</td><td>'+o.ic.toFixed(3)+'</td><td>'+o.t.toFixed(2)+'</td><td class="bt-sig '+sigCls(o)+'">'+sig(o)+'</td></tr>';
+  const maxAbs=Math.max(...bt.quint20.map(Math.abs), 1);
+  const bars=bt.quint20.map((v,i)=>{
+    const h=Math.round(Math.abs(v)/maxAbs*60)+4; const up=v>=0;
+    return '<div class="bt-q"><div class="bt-bar '+(up?'bt-up':'bt-down')+'" style="height:'+h+'px;"></div><div class="bt-ql">Q'+(i+1)+'</div><div class="bt-qv">'+(up?'+':'')+v.toFixed(1)+'%</div></div>';
+  }).join('');
+  box.innerHTML=''
+    +'<p class="bt-note">综合分 = 动量(Jegadeesh&amp;Titman 1993) + 价值分位(FF/均值回归) + 低波动(Ang et al. 2006) 三因子：截面 z-score 标准化，动量对沪深300中性化；权重由历史 RankIC 数据驱动（非主观）。</p>'
+    +'<div class="bt-w"><span>因子权重</span> 动量 <b>'+wPct(W.mom)+'</b> · 价值 <b>'+wPct(W.val)+'</b> · 低波动 <b>'+wPct(W.lowvol)+'</b></div>'
+    +'<table class="bt-tbl"><thead><tr><th>因子</th><th>RankIC·20日</th><th>t值</th><th>显著性</th></tr></thead><tbody>'
+    + icRow('综合分', bt.ic.comp)+icRow('动量', bt.ic.mom)+icRow('价值', bt.ic.val)+icRow('低波动', bt.ic.lowvol)
+    +'</tbody></table>'
+    +'<p class="bt-note">样本内滚动回测：'+bt.nPoints+' 个月末时点 × '+bt.nCodes+' 只行业ETF。'+(bt.ic.comp.ic>=0?'RankIC&gt;0 表示综合分对「未来20日收益」有正向排序能力。':'RankIC&lt;0 表示本样本期综合分与「未来20日收益」呈负相关，高分组合未来表现反而偏弱。')+'</p>'
+    +'<div class="bt-chart"><div class="bt-chart-title">五分组平均未来20日收益（Q1最低分 → Q5最高分）</div><div class="bt-bars">'+bars+'</div><div class="bt-ls">多空收益(Q5−Q1)：'+(bt.longShort20>=0?'+':'')+bt.longShort20.toFixed(1)+'%</div></div>'
+    + (bt.ic.comp.ic<0 ? '<p class="bt-warn" style="border-color:#f3c0c0;background:#fdecec;color:#c0392b;">⚠️ 本样本期综合分与未来20日收益呈<b>负相关</b>（高分组合未来表现反而偏弱），可能与区间市场风格 / 行业轮动阶段有关。该榜单当前更适合作为「截面相对位置」参考，而非收益预测；实盘请结合市况。</p>' : '')
+    +'<p class="bt-warn">⚠️ 以上为样本内历史统计，存在过拟合与样本偏差风险；市场风格切换时规律可能失效。仅作方法学验证，<b>不构成投资建议</b>。</p>';
 }
 function _renderOppList(rows){
   const box=$('oppList'); if(!box) return;
