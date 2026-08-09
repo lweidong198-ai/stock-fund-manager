@@ -299,8 +299,31 @@
 .fund-page{display:grid;grid-template-columns:264px 1fr;gap:14px;align-items:stretch;min-height:0;height:100%;overflow:hidden;}
 .fund-side{display:flex;flex-direction:column;gap:14px;min-width:0;min-height:0;overflow:hidden;}
 .fund-side .watch-card{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
-.fund-side #fundList{flex:1;min-height:0;overflow:auto;}
+.fund-side #oppList{flex:1;min-height:0;overflow:auto;}
 .fund-page .chart-card{overflow:auto;min-height:0;}
+  /* 机会精选 */
+  .opp-toolbar{display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap;}
+  .opp-list{display:flex;flex-direction:column;gap:7px;}
+  .opp-row{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:8px 9px;border:1px solid #e6eaf1;border-radius:9px;background:#fff;cursor:pointer;transition:.12s;}
+  .opp-row:hover{border-color:#b9c4d6;background:#f7f9fc;}
+  .opp-row.on{border-color:var(--accent,#2f6fed);background:#eef4ff;box-shadow:0 0 0 1px rgba(47,111,237,.25) inset;}
+  .opp-row .opp-rank{font-size:13px;font-weight:700;color:#9aa7b8;text-align:center;}
+  .opp-row .opp-name{font-weight:600;font-size:13.5px;}
+  .opp-row .opp-etf{font-size:11.5px;color:var(--sub);}
+  .opp-row .opp-score{font-size:18px;font-weight:800;text-align:center;min-width:42px;}
+  .opp-row .opp-tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-top:3px;}
+  .opp-row .opp-reason{font-size:11.5px;color:#6b7686;margin-top:3px;line-height:1.35;}
+  .opp-row .opp-add{justify-self:end;align-self:start;}
+  .opp-strong{background:#fdecec;color:#e01f22;}
+  .opp-attn{background:#fff3e0;color:#e08a00;}
+  .opp-watch{background:#eef3f8;color:#3a6ea5;}
+  .opp-caut{background:#eef1ee;color:#6b7686;}
+  .opp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;margin-top:12px;}
+  .opp-card{border:1px solid #e6eaf1;border-radius:10px;padding:10px;background:#fbfcfe;}
+  .opp-card .oc-lbl{font-size:11.5px;color:#8a93a3;margin-bottom:4px;}
+  .opp-card .oc-val{font-size:16px;font-weight:700;}
+  .opp-card .oc-sub{font-size:11.5px;margin-top:3px;}
+  .opp-detail-hint{font-size:11.5px;color:#8a93a3;margin-top:6px;}
   /* 建仓分析：顶部标的选择器 */
   .an-select-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 2px;}
   .an-select-row .meta{font-size:12px;}
@@ -481,7 +504,7 @@
     <div class="navitem nav-watch" data-view="market">📊 行情看板</div>
     <div class="navgroup ng-asset"><span class="ng-bar"></span>我的资产</div>
     <div class="navitem nav-asset" data-view="hold">💼 持仓管理</div>
-    <div class="navitem nav-asset" data-view="fund">🪙 基金净值</div>
+    <div class="navitem nav-asset" data-view="fund">🔍 机会精选</div>
     <div class="navgroup ng-decision"><span class="ng-bar"></span>分析决策</div>
     <div class="navitem nav-decision" data-view="analysis">🧠 建仓分析</div>
     <div class="navitem nav-decision" data-view="fundAnalysis">📈 基金深度分析</div>
@@ -645,30 +668,34 @@
     <div id="viewFund" class="view fund-page" style="display:none;">
       <div class="fund-side">
         <div class="card watch-card">
-          <h2>基金 <span class="tag">点列表看净值</span></h2>
-          <div class="explain">📙 <b>单位净值</b>=每份价格，每个交易日更新。点列表里任一行，右侧显示净值走势曲线。</div>
-          <div id="fundList"></div>
+          <h2>🔍 机会精选 <span class="tag">行业ETF多因子扫描</span></h2>
+          <div class="opp-toolbar">
+            <select id="oppSort" class="add-input" style="width:150px;">
+              <option value="opp">综合机会分</option>
+              <option value="mom">动量(中期↑)</option>
+              <option value="val">估值便宜度</option>
+              <option value="trend">趋势强度</option>
+              <option value="lowvol">低波动稳健</option>
+            </select>
+            <button id="oppRescan" class="ghost">🔄 重新扫描</button>
+            <span class="meta" id="oppTime" style="margin-left:auto;"></span>
+          </div>
+          <div id="oppBanner" class="regime-banner" style="display:none;"></div>
+          <div id="oppList" class="opp-list"></div>
         </div>
       </div>
-      <div class="card chart-card" id="fundDetailCard">
-        <div class="empty" id="fundEmpty">自选里还没有场外基金，去行情看板「加」一只（类型选"场外基金"）</div>
-        <div id="fundDetail" style="display:none;">
+      <div class="card chart-card" id="oppDetailCard">
+        <div class="empty" id="oppEmpty">← 左侧选一只行业ETF，这里看K线 + 多维机会解读</div>
+        <div id="oppDetail" style="display:none;">
           <div class="detail-head">
-            <span class="big" id="fName">--</span>
-            <span class="big" id="fPrice">--</span>
-            <span id="fChg">--</span>
-            <span class="meta" id="fMeta"></span>
-            <span style="margin-left:auto;" class="meta" id="fTime"></span>
+            <span class="big" id="oppDName">--</span>
+            <span class="big" id="oppDPrice">--</span>
+            <span id="oppDChg">--</span>
+            <span class="meta" id="oppDMeta"></span>
+            <button id="oppToMarket" class="ghost" style="margin-left:auto;">在行情看板查看 →</button>
           </div>
-          <div class="toggles" id="fundRange">
-            <span class="tg" data-days="90">近3月</span>
-            <span class="tg" data-days="180">近6月</span>
-            <span class="tg on" data-days="365">近1年</span>
-            <span class="tg" data-days="1095">近3年</span>
-            <span class="tg" data-days="100000">全部</span>
-          </div>
-          <canvas id="fundCanvas" height="380"></canvas>
-          <div class="hint" id="fundHint"></div>
+          <canvas id="oppKline" height="300"></canvas>
+          <div class="opp-cards" id="oppCards"></div>
         </div>
       </div>
     </div>
@@ -881,7 +908,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08i';  // i=行情看板点基金原地画净值(不跳基金工作区): 新增#marketFundDetail区块+showMarketFund/hideMarketFund; selectCode/goView('market')放开"基金必改股票"限制; applyFundData/useDemoFund/resize按当前视图智能重绘(market视图画mFundNav)
+const APP_VER = '2026-08-08j';  // j=原"基金净值"工作区转型为「机会精选」模块: 行业ETF多因子(动量+估值分位+趋势R²+波动+量价)综合机会分排榜; 左榜右详情(自绘K线+6维卡片+一句话理由); 可加自选/在行情看板查看; 复用INDUSTRY_POOL/computeSectorIndicators/sectorForecast/pricePct; i=行情看板点基金原地画净值; h=删说明文字
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -1374,7 +1401,7 @@ function parseFundJs(text, code){
 function applyFundData(code, fd){
   if(!fd) return;
   state.fundData[code]=fd;
-  if(state.selected===code){ if(state.view==='market') showMarketFund(code); else renderFund(); }
+  if(state.selected===code){ if(state.view==='market') showMarketFund(code); }
   renderWatch(); renderHold();
   if(state.view==='fundAnalysis' && state.faCode===code) renderFundAnalysis();
   setDemo(false); setDataStatus('ok');
@@ -1382,7 +1409,7 @@ function applyFundData(code, fd){
 function useDemoFund(code){
   const fd=demoFund(code);
   state.fundData[code]=fd;
-  if(state.selected===code){ if(state.view==='market') showMarketFund(code); else renderFund(); }
+  if(state.selected===code){ if(state.view==='market') showMarketFund(code); }
   renderWatch(); renderHold();
   if(state.view==='fundAnalysis' && state.faCode===code) renderFundAnalysis();
   setDemo(true); setDataStatus('demo');
@@ -2264,9 +2291,7 @@ function goView(v){
     return;
   }
   if(v==='fund'){
-    const cur=state.watch.find(x=>x.code===state.selected);
-    if(!cur || cur.kind==='stock'){ const fd=state.watch.find(x=>x.kind==='fund'); if(fd) state.selected=fd.code; }
-    showView('fund'); renderFund(); return;
+    showView('fund'); renderOpportunities(); return;
   }
   if(v==='analysis'){
     if(!state.watch.some(x=>x.code===state.selected)){ const f=state.watch[0]; if(f) state.selected=f.code; }
@@ -2753,6 +2778,191 @@ async function renderSectors(){
   });
 }
 
+/* ============ 机会精选（行业ETF多因子机会扫描·寻找当前值得关注的方向） ============ */
+// 综合「中期动量 + 估值便宜度(价格历史分位) + 趋势强度(回归R²) + 波动稳健 + 量价配合」
+// 给行业ETF打综合机会分，按分排序展示。全部从已拉取的日K线实时计算，零Key、纯描述当前状态，不预测未来涨跌。
+const OPP_CACHE={rows:null, t:0};
+function oppValLabel(p){ if(p==null) return {t:'数据不足', c:'#bbb'}; if(p>=0.85) return {t:'估值偏高·偏热', c:'#e01f22'}; if(p>=0.6) return {t:'估值合理偏上', c:'#e08a00'}; if(p>=0.35) return {t:'估值合理', c:'#3a6ea5'}; if(p>=0.15) return {t:'估值偏低', c:'#0f9d58'}; return {t:'深度低估', c:'#0f9d58'}; }
+function oppReason(r){
+  const c60=r.c60, c20=r.c20, p=r.pct, up=(c60+c20)>0;
+  let s;
+  if(c60>18 && p<0.55) s='上行通道完好且估值合理，趋势与空间兼具';
+  else if(c60>18 && p>=0.55) s='动能强但估值已偏高，注意追高风险';
+  else if(c60>5 && c20>10) s='近期加速上行，量价配合中寻找延续';
+  else if(c60>5 && c20<=0) s='中期向好但短线回调，等回踩确认';
+  else if(c60<=-2 && p<0.25) s='深度回调进入低估区，可埋伏等待反转';
+  else if(c60<=-2 && p>=0.5) s='趋势走弱且估值不低，暂避锋芒';
+  else if(Math.abs(c60)<6 && Math.abs(c20)<6) s='横盘震荡，等待方向选择';
+  else if(up) s='温和上行，估值中性';
+  else s='偏弱整理，暂观望';
+  if(r.vol && r.vol.cls==='vol-up') s+=' ·量价齐升';
+  else if(r.vol && r.vol.cls==='vol-down') s+=' ·放量承压';
+  return s;
+}
+function oppComposite(r){
+  const c60=r.c60||0, c20=r.c20||0, p=r.pct;
+  const mom=clamp((clamp(c60,-25,25)+25)/50*55 + (clamp(c20,-15,15)+15)/30*45, 0, 100);
+  const val=(p==null)?50:(p>=0.9?15:clamp(100-p*100,10,100));
+  let trend=50;
+  if(r.ind){ const up=(c60+c20)>0; trend=up?clamp(50+r.ind.reg.r2*50,50,100):clamp(50-r.ind.reg.r2*50,0,50); }
+  const vol=(r.ind&&r.ind.vol)?clamp(100-(r.ind.vol.ann-15)*2.2,15,95):60;
+  const vp={'vol-up':100,'vol-flat':70,'vol-warn':40,'vol-down':25}[r.vol?r.vol.cls:'vol-flat']||70;
+  const opp=Math.round(0.40*mom+0.22*val+0.18*trend+0.10*vol+0.10*vp);
+  let label,cls;
+  if(opp>=72){ label='★ 强烈推荐'; cls='opp-strong'; }
+  else if(opp>=58){ label='重点关注'; cls='opp-attn'; }
+  else if(opp>=42){ label='观察'; cls='opp-watch'; }
+  else { label='谨慎'; cls='opp-caut'; }
+  return {opp,mom,val,trend,vol,vp,label,cls};
+}
+async function scanOpportunities(){
+  const POOL=INDUSTRY_POOL.concat(loadCustomSectors());
+  let quotes={};
+  try{
+    const ctrl=new AbortController(); const to=setTimeout(()=>{ try{ctrl.abort();}catch(_){} },8000);
+    const r=await fetch('https://qt.gtimg.cn/q='+POOL.map(x=>normCode(x.code)).join(',')+'&_='+Date.now(),{signal:ctrl.signal});
+    clearTimeout(to); quotes=parseTencent(new TextDecoder('gb18030').decode(await r.arrayBuffer()));
+  }catch(e){ console.warn('opp quotes failed',e); }
+  let bench60=null; try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){}
+  const rows=await Promise.all(POOL.map(async x=>{
+    const kl=await loadKlineP(x.code,'d');
+    const q=quotes[normCode(x.code)]||{};
+    const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);
+    const vol=sectorVolume(kl,c20);
+    const ind=computeSectorIndicators(kl);
+    const pct3y=pricePct(kl,3);
+    const F=sectorForecast({c5,c20,c60}, vol.cls, (c60==null||bench60==null)?null:(c60-bench60), ind);
+    const comp=oppComposite({c5,c20,c60,pct:pct3y,vol,ind});
+    return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct||0), price:(q.price||null),
+             c5,c20,c60, vol, ind, pct:pct3y, F, comp, _kl:kl };
+  }));
+  rows.forEach(r=>{ r.reason=oppReason(r); });
+  OPP_CACHE.rows=rows; OPP_CACHE.quotes=quotes; OPP_CACHE.t=Date.now();
+  return rows;
+}
+function renderOpportunities(){
+  const box=$('oppList'); if(!box) return;
+  box.innerHTML='<div class="empty">正在扫描 '+INDUSTRY_POOL.length+' 个行业ETF的行情与K线（约数秒）…</div>';
+  if(OPP_CACHE.rows && Date.now()-OPP_CACHE.t<5*60*1000){ _renderOppList(OPP_CACHE.rows); return; }
+  scanOpportunities().then(rows=>{ _renderOppList(rows); }).catch(e=>{ box.innerHTML='<div class="empty">扫描失败：'+e.message+'</div>'; });
+}
+function _renderOppList(rows){
+  const box=$('oppList'); if(!box) return;
+  const sort=$('oppSort')?$('oppSort').value:'opp';
+  const sorted=rows.slice().sort((a,b)=>{
+    const ca=a.comp,bc=b.comp;
+    if(sort==='mom')  return (bc.mom||0)-(ca.mom||0);
+    if(sort==='val')  return (bc.val||0)-(ca.val||0);
+    if(sort==='trend')return (bc.trend||0)-(ca.trend||0);
+    if(sort==='lowvol')return (ca.vol||0)-(bc.vol||0);
+    return (bc.opp||0)-(ca.opp||0);
+  });
+  // 市况条
+  const bench=rows.find(r=>r.code==='sh000300'); // 不一定有，用沪深300基准单独算已在scan里，这里仅做展示提示
+  const banner=$('oppBanner');
+  if(banner) banner.style.display='none';
+  const inWatch=c=>state.watch.some(w=>w.code===normCode(c));
+  box.innerHTML=sorted.map((r,i)=>{
+    const c=r.comp, sc=scoreColor(c.opp);
+    const up=r.day>=0;
+    return '<div class="opp-row" data-code="'+r.code+'">'
+      +'<div class="opp-rank">'+(i+1)+'</div>'
+      +'<div><div class="opp-name">'+r.name+' <span class="opp-etf">'+r.etf+' · '+r.code+'</span></div>'
+        +'<span class="opp-tag '+c.cls+'">'+c.label+'</span>'
+        +'<div class="opp-reason">'+r.reason+'</div></div>'
+      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;"><div class="opp-score" style="color:'+sc+';">'+c.opp+'</div>'
+        +'<button class="ghost opp-add" data-add="'+r.code+'" style="padding:2px 7px;font-size:11px;">'+(inWatch(r.code)?'已加★':'＋自选')+'</button></div>'
+      +'</div>';
+  }).join('');
+  if($('oppTime')) $('oppTime').textContent='更新 '+ts();
+  box.querySelectorAll('.opp-row').forEach(row=>{
+    row.onclick=(e)=>{ if(e.target.closest('.opp-add')) return; selectOpp(row.dataset.code); };
+  });
+  box.querySelectorAll('.opp-add').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation(); const code=normCode(b.dataset.add);
+    if(!state.watch.some(w=>w.code===code)){ state.watch.push({code:code,kind:'stock',name:''}); save(); renderWatch(); }
+    b.textContent='已加★';
+  });
+}
+function selectOpp(code){
+  const rows=OPP_CACHE.rows||[];
+  const r=rows.find(x=>x.code===code)||{code};
+  document.querySelectorAll('.opp-row').forEach(o=>o.classList.toggle('on', o.dataset.code===code));
+  renderOppDetail(r);
+}
+function renderOppDetail(r){
+  const det=$('oppDetail'), empty=$('oppEmpty'); if(!det) return;
+  if(!r||!r.code){ empty.style.display='block'; det.style.display='none'; return; }
+  empty.style.display='none'; det.style.display='block';
+  const q=(OPP_CACHE.quotes||{})[normCode(r.code)]||{};
+  $('oppDName').textContent=r.name+' ('+r.etf+')';
+  $('oppDPrice').textContent=r.price!=null?fmt(r.price,3):'--';
+  const cEl=$('oppDChg'); const cp=r.day||0; cEl.textContent=(cp>=0?'+':'')+cp.toFixed(2)+'%'; cEl.className=cls(cp);
+  $('oppDMeta').textContent=r.code+' · 行业ETF';
+  $('oppToMarket').onclick=()=>{ const code=normCode(r.code); if(!state.watch.some(w=>w.code===code)){ state.watch.push({code,kind:'stock',name:r.name}); save(); renderWatch(); } state.selected=code; showView('market'); if((state.watch.find(x=>x.code===code)||{}).kind==='fund') showMarketFund(code); else renderDetail(); };
+  // K线
+  drawCandle('oppKline', r._kl);
+  // 多维卡片
+  const cards=$('oppCards'); if(cards){
+    const volR=(r.ind&&r.ind.vol)?r.ind.vol.ann:null;
+    const r2=(r.ind)?r.ind.reg.r2:null;
+    const vlab=oppValLabel(r.pct);
+    const L=sectorLight(r);
+    const F=r.F||{};
+    const c20c=(r.c20==null?'--':(r.c20>=0?'+':'')+r.c20.toFixed(1)+'%');
+    const c60c=(r.c60==null?'--':(r.c60>=0?'+':'')+r.c60.toFixed(1)+'%');
+    cards.innerHTML=''
+      +_oppCard('动量(中期/近期)', (r.c60==null?'--':(r.c60>=0?'+':'')+r.c60.toFixed(1)+'%')+' / '+c20c, '60日 / 20日涨幅', (r.c60>0?'var(--up)':'var(--down)'))
+      +_oppCard('估值分位', r.pct==null?'--':Math.round(r.pct*100)+'%', vlab.t, vlab.c)
+      +_oppCard('趋势强度', (r2==null?'--':Math.round(r2*100)+'%'), L.label+(F.phase?(' · '+F.phase):''), L.dot)
+      +_oppCard('年化波动', volR==null?'--':volR.toFixed(1)+'%', volR>40?'波动偏大':(volR<22?'稳健':'中等'), volR>40?'#e08a00':(volR<22?'#0f9d58':'#3a6ea5'))
+      +_oppCard('量价配合', (r.vol?r.vol.label:'--'), r.vol&&r.vol.cls==='vol-up'?'量价齐升':(r.vol&&r.vol.cls==='vol-down'?'放量承压':'量能平稳'), r.vol&&r.vol.cls==='vol-up'?'#0f9d58':(r.vol&&r.vol.cls==='vol-down'?'#e01f22':'#3a6ea5'))
+      +_oppCard('技术面状态', (F.label||'--'), '综合分 '+(F.score==null?'--':F.score)+(F.conf?(' ·一致度'+F.conf):''), (F.cls==='f-down'?'#1aa260':(F.cls==='f-strong'?'#e01f22':'#e08a00')));
+  }
+}
+function _oppCard(lbl,val,sub,color){ return '<div class="opp-card"><div class="oc-lbl">'+lbl+'</div><div class="oc-val" style="color:'+color+';">'+val+'</div><div class="oc-sub">'+sub+'</div></div>'; }
+// 自包含K线蜡烛图（机会精选详情用）：蜡烛 + MA5/MA20 + 成交量
+function drawCandle(canvasId, kl){
+  const cv=$(canvasId); if(!cv) return; cv._kl=kl;
+  const {ctx,w,h}=setup(cv);
+  if(!kl||!kl.length){ ctx.fillStyle=FLAT; ctx.font='13px sans-serif'; ctx.fillText('暂无数据',12,20); return; }
+  const padL=8, padR=52, volH=64, gap=8, cw=w-padR;
+  const priceH=h-volH-gap-16;
+  const closes=kl.map(x=>x.close);
+  const ma5=sma(closes,5), ma20=sma(closes,20);
+  let lo=Math.min(...kl.map(x=>x.low)), hi=Math.max(...kl.map(x=>x.high));
+  lo=Math.min(lo,...ma5.filter(x=>x!=null),...ma20.filter(x=>x!=null));
+  hi=Math.max(hi,...ma5.filter(x=>x!=null),...ma20.filter(x=>x!=null));
+  const pad=(hi-lo)*0.06||1; lo-=pad; hi+=pad;
+  const n=kl.length, bw=Math.max(2,cw/n*0.62);
+  const X=i=>padL+(i+0.5)*(cw/n);
+  const Y=p=>priceH-(p-lo)/(hi-lo)*priceH;
+  const volMax=Math.max(...kl.map(x=>x.vol),1);
+  const Yv=v=>h-(v/volMax)*volH;
+  // 网格
+  ctx.strokeStyle=GRID; ctx.lineWidth=1; ctx.font='10px sans-serif'; ctx.textAlign='left';
+  for(let g=0;g<=4;g++){ const p=lo+(hi-lo)*g/4, y=Y(p); ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(cw,y);ctx.stroke(); ctx.fillStyle=FLAT; ctx.fillText(fmt(p,2),cw+4,y+3); }
+  // 成交量
+  const volTop=h-volH-gap+4;
+  for(let i=0;i<n;i++){ const x=X(i), k=kl[i], up=k.close>=k.open; ctx.fillStyle=up?UP:DOWN; const vh=Math.max(1,(k.vol/volMax)*volH); ctx.fillRect(x-bw/2, h-vh, bw, vh); }
+  ctx.strokeStyle='#dde3ec'; ctx.beginPath(); ctx.moveTo(padL,volTop); ctx.lineTo(cw,volTop); ctx.stroke();
+  // 蜡烛
+  for(let i=0;i<n;i++){ const x=X(i), k=kl[i], up=k.close>=k.open, col=up?UP:DOWN;
+    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x,Y(k.high)); ctx.lineTo(x,Y(k.low)); ctx.stroke();
+    const yO=Y(k.open), yC=Y(k.close), top=Math.min(yO,yC), hh=Math.max(1,Math.abs(yC-yO));
+    ctx.fillRect(x-bw/2, top, bw, hh);
+  }
+  // MA
+  const drawMa=(ma,color)=>{ ctx.strokeStyle=color; ctx.lineWidth=1.3; ctx.beginPath(); let started=false;
+    for(let i=0;i<n;i++){ if(ma[i]==null) continue; const x=X(i), y=Y(ma[i]); if(!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y); } ctx.stroke(); };
+  drawMa(ma5,'#e08a00'); drawMa(ma20,'#2f6fed');
+  // 图例
+  ctx.font='10px sans-serif'; ctx.textAlign='left';
+  ctx.fillStyle='#e08a00'; ctx.fillText('MA5',padL+2,12); ctx.fillStyle='#2f6fed'; ctx.fillText('MA20',padL+38,12);
+}
+$('oppSort') && ($('oppSort').onchange=()=>{ if(OPP_CACHE.rows) _renderOppList(OPP_CACHE.rows); });
+$('oppRescan') && ($('oppRescan').onclick=()=>{ OPP_CACHE.rows=null; OPP_CACHE.t=0; renderOpportunities(); });
+
 /* ============ 季度轮动（分市况·样本外验证规律·季度维度） ============ */
 // 把「行业趋势扫描」里唯一经样本外验证的规律（牛→低波占优 / 熊→动量反转）单独做成季度维度的选方向工具。
 // 不预测明天涨跌，只在当前市况下按历史统计胜出的那一类行业给「季度持仓观察方向」。明确标注季度维度+样本外+45pp+不构成建议。
@@ -2983,6 +3193,7 @@ function bindKlineInteractions(){
 
 /* ============ 基金工作区 ============ */
 function renderFund(){
+  if(!$('fundList')) return;   // 原「基金净值工作区」已转型为「机会精选」，此处仅作安全兜底
   const funds=state.watch.filter(w=>w.kind==='fund');
   const list=$('fundList'), empty=$('fundEmpty'), det=$('fundDetail');
   if(!funds.length){ list.innerHTML=''; empty.style.display='block'; det.style.display='none'; return; }
@@ -3166,7 +3377,7 @@ function renderHold(){
     const h=state.hold.find(x=>x.code===code); if(!h) return;
     h[f] = (v>0)? v : 0; save();
     if(f==='shares'||f==='cost'){ renderHold(); }   // 数量/成本变了→重算市值盈亏
-    else if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind==='fund') renderFund(); else renderDetail(); }
+    else if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind!=='fund') renderDetail(); }
   }; });
 }
 
@@ -3560,7 +3771,7 @@ document.querySelectorAll('.navitem').forEach(t=>t.onclick=()=>goView(t.dataset.
 let timer=null;
 function startTimer(){ if(timer)return; timer=setInterval(refreshQuotes, CFG.refreshMs); }
 function stopTimer(){ if(timer){clearInterval(timer);timer=null;} }
-window.addEventListener('resize',()=>{ if(state.selected){ const w=state.watch.find(x=>x.code===state.selected); if(w&&w.kind==='fund'){ if(state.view==='market') showMarketFund(state.selected); else renderFund(); } else renderDetail(); } });
+window.addEventListener('resize',()=>{ if(state.selected){ const w=state.watch.find(x=>x.code===state.selected); if(w&&w.kind==='fund'){ if(state.view==='market') showMarketFund(state.selected); } else renderDetail(); } });
 
 /* ============ 基金深度分析（净值统计·风险体检） ============ */
 function pctile(arr,q){ if(!arr.length) return 0; const s=arr.slice().sort((a,b)=>a-b); const idx=(s.length-1)*q; const lo=Math.floor(idx),hi=Math.ceil(idx); if(lo===hi) return s[lo]; return s[lo]+(s[hi]-s[lo])*(idx-lo); }
@@ -3737,7 +3948,7 @@ load(); bindFaHover();
 refreshIndices();
 showView('home');
 if(!state.selected && state.watch.length){ state.selected=state.watch[0].code; } // 默认选中第一只，避免初次进各视图空白
-renderWatch(); renderHold(); renderHoldSelect(); renderFund();
+renderWatch(); renderHold(); renderHoldSelect();
 const _funds=fundCodesToLoad();
 if(_funds.length){ _funds.forEach(c=>loadFund(c)); } refreshQuotes();
 renderGlobalRegime();   // 顶部常驻市况战略透镜（异步拉沪深300近60日，不阻塞首屏）
