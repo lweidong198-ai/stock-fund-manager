@@ -908,7 +908,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-08j';  // j=原"基金净值"工作区转型为「机会精选」模块: 行业ETF多因子(动量+估值分位+趋势R²+波动+量价)综合机会分排榜; 左榜右详情(自绘K线+6维卡片+一句话理由); 可加自选/在行情看板查看; 复用INDUSTRY_POOL/computeSectorIndicators/sectorForecast/pricePct; i=行情看板点基金原地画净值; h=删说明文字
+const APP_VER = '2026-08-08k';  // k=修复行情看板点场外基金"无数据": 场外基金净值来自东方财富, 沙箱/预览环境不可达时不再卡"加载中"/不再显示假演示净值, 改为明确提示(为何无数据+本机打开/换场内ETF建议); 新增state.fundFail标记(东财onerror/超时触发, applyFundData成功清除); 自选列表对不可达基金诚实显示"—"; 新增paintCanvasMsg; j=机会精选模块; i=点基金原地画净值
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -969,6 +969,17 @@ function paintCanvasError(cvId, err){
   const text='图表绘制出错：'+(err&&err.message?err.message:err)+'\n（已记录，请截图反馈）';
   const lines=text.split('\n');
   lines.forEach((t,i)=>ctx.fillText(t,12,24+i*20));
+}
+// 在画布上居中显示一段多行说明文字（用于"数据源不可达"等友好提示，不假装数据）
+function paintCanvasMsg(cvId, msg, color){
+  const cv=$(cvId); if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const w=cv.clientWidth||300, h=cv.clientHeight||parseInt(cv.getAttribute('height'))||300;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle=color||'#999'; ctx.font='13px sans-serif'; ctx.textAlign='center';
+  const lines=(''+msg).split('\n');
+  const lh=20, total=lines.length*lh;
+  lines.forEach((t,i)=>ctx.fillText(t, w/2, h/2 - total/2 + i*lh + lh));
 }
 function sinaSymbol(code){
   if(/^sh|^sz|^hk/i.test(code)) return code.toLowerCase();
@@ -1400,6 +1411,7 @@ function parseFundJs(text, code){
 }
 function applyFundData(code, fd){
   if(!fd) return;
+  if(state.fundFail) delete state.fundFail[code];   // 真实净值拿到 → 清除不可达标记
   state.fundData[code]=fd;
   if(state.selected===code){ if(state.view==='market') showMarketFund(code); }
   renderWatch(); renderHold();
@@ -1435,7 +1447,7 @@ function _pumpFund(){
   const timeout=setTimeout(()=>{                          // 8秒未回来 → 兜底解析/演示
     _fundBusy=false; _curFundCode=null;
     const fd=parseFundJs(window.__fundRaw&&window.__fundRaw[code]||'');
-    if(fd) applyFundData(code,fd); else useDemoFund(code);
+    if(fd) applyFundData(code,fd); else { (state.fundFail=state.fundFail||{})[code]=true; useDemoFund(code); } // 东方财富不可达：标记失败，行情看板给出提示而非假数据
     _pumpFund();
   }, 8000);
   const s=document.createElement('script'); s.src=src; s.async=true;
@@ -1455,7 +1467,7 @@ function _pumpFund(){
   s.onerror=function(){ // 跨域脚本被拦 → 兜底解析/演示
     clearTimeout(timeout); _fundBusy=false; _curFundCode=null;
     const fd=parseFundJs(window.__fundRaw&&window.__fundRaw[code]||'');
-    if(fd) applyFundData(code,fd); else useDemoFund(code);
+    if(fd) applyFundData(code,fd); else { (state.fundFail=state.fundFail||{})[code]=true; useDemoFund(code); } // 东方财富不可达：标记失败，行情看板给出提示而非假数据
     _pumpFund();
   };
   document.body.appendChild(s);
@@ -2824,18 +2836,26 @@ async function scanOpportunities(){
     clearTimeout(to); quotes=parseTencent(new TextDecoder('gb18030').decode(await r.arrayBuffer()));
   }catch(e){ console.warn('opp quotes failed',e); }
   let bench60=null; try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){}
-  const rows=await Promise.all(POOL.map(async x=>{
-    const kl=await loadKlineP(x.code,'d');
-    const q=quotes[normCode(x.code)]||{};
-    const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);
-    const vol=sectorVolume(kl,c20);
-    const ind=computeSectorIndicators(kl);
-    const pct3y=pricePct(kl,3);
-    const F=sectorForecast({c5,c20,c60}, vol.cls, (c60==null||bench60==null)?null:(c60-bench60), ind);
-    const comp=oppComposite({c5,c20,c60,pct:pct3y,vol,ind});
-    return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct||0), price:(q.price||null),
-             c5,c20,c60, vol, ind, pct:pct3y, F, comp, _kl:kl };
+  const results=await Promise.all(POOL.map(async x=>{
+    try{
+      const kl=await loadKlineP(x.code,'d');
+      if(!kl||!kl.length) return null;
+      const q=quotes[normCode(x.code)]||{};
+      const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);
+      const vol=sectorVolume(kl,c20);
+      const ind=computeSectorIndicators(kl);
+      const pct3y=pricePct(kl,3);
+      const F=sectorForecast({c5,c20,c60}, vol.cls, (c60==null||bench60==null)?null:(c60-bench60), ind);
+      const comp=oppComposite({c5,c20,c60,pct:pct3y,vol,ind});
+      return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct||0), price:(q.price||null),
+               c5,c20,c60, vol, ind, pct:pct3y, F, comp, _kl:kl };
+    }catch(e){ console.warn('opp scan item failed', x.code, e); return null; }
   }));
+  const rows=results.filter(Boolean);
+  if(!rows.length){
+    const err=new Error('K线数据源（腾讯 fqkline）在当前环境无法访问。请在本机双击打开 index.html 使用「机会精选」（本机浏览器可直接拉取）。');
+    err.klineBlocked=true; throw err;
+  }
   rows.forEach(r=>{ r.reason=oppReason(r); });
   OPP_CACHE.rows=rows; OPP_CACHE.quotes=quotes; OPP_CACHE.t=Date.now();
   return rows;
@@ -3225,18 +3245,36 @@ function showFundDetail(code){
 function showMarketFund(code){
   const w=state.watch.find(x=>x.code===code);
   if(!w || w.kind!=='fund'){ hideMarketFund(); if(state.view==='market') renderDetail(); return; }
-  const fd=state.fundData[code];
+  const mfd=$('marketFundDetail'); if(!mfd) return; mfd.style.display='block';
   $('detailEmpty').style.display='none';
   $('detail').style.display='none';
-  const mfd=$('marketFundDetail'); if(!mfd) return; mfd.style.display='block';
-  if(!fd){ $('mFName').textContent=code; $('mFPrice').textContent='--'; $('mFChg').textContent='--'; $('mFMeta').textContent='场外基金 · 单位净值'; $('mFTime').textContent=''; $('mFHint').textContent='净值加载中…（若长时间无数据，该源可能需要本地服务器环境）'; return; }
-  $('mFName').textContent=fd.name||code;
-  $('mFPrice').textContent=fmt(fd.latest,4);
-  const chg=fd.latest-fd.prev, cp=fd.prev?chg/fd.prev*100:0; const cEl=$('mFChg'); cEl.textContent=pct(cp)+' ('+fmt(chg,4)+')'; cEl.className=cls(cp);
-  $('mFMeta').textContent='场外基金 · 单位净值';
-  $('mFTime').textContent=fd.nav.length? '截至 '+new Date(fd.nav[fd.nav.length-1].t).toLocaleDateString('zh-CN'):'';
-  drawNav('mFundNav', fd);
-  $('mFHint').textContent='累计净值：'+fmt(fd.cum.length?fd.cum[fd.cum.length-1].nav:0,4)+' · 共 '+fd.nav.length+' 条净值记录';
+  // ① 东方财富数据源在当前环境不可达 → 明确提示，绝不假装演示数据误导
+  if(state.fundFail && state.fundFail[code]){
+    $('mFName').textContent=code; $('mFPrice').textContent='—'; $('mFChg').textContent='—'; $('mFChg').className='flat';
+    $('mFMeta').textContent='场外基金 · 单位净值'; $('mFTime').textContent=''; $('mFSub').textContent='';
+    $('mFHint').innerHTML='🌐 此标的为<b>场外基金</b>，净值来自东方财富（fund.eastmoney.com）。当前「预览/沙箱」环境网络受限，无法访问该数据源，所以这里暂无数据。';
+    $('mFStat').textContent='东方财富数据源在当前环境不可达';
+    paintCanvasMsg('mFundNav','东方财富净值\n当前环境不可访问\n\n建议：① 本机双击 index.html 使用\n② 或换场内ETF(如 515050 / 510300) 看K线', '#999');
+    return;
+  }
+  const fd=state.fundData[code];
+  // ② 已有真实净值数据 → 画净值走势
+  if(fd && fd.nav && fd.nav.length && !fd._demo){
+    $('mFName').textContent=fd.name||code;
+    $('mFPrice').textContent=fmt(fd.latest,4);
+    const chg=fd.latest-fd.prev, cp=fd.prev?chg/fd.prev*100:0; const cEl=$('mFChg'); cEl.textContent=pct(cp)+' ('+fmt(chg,4)+')'; cEl.className=cls(cp);
+    $('mFMeta').textContent='场外基金 · 单位净值';
+    $('mFTime').textContent=fd.nav.length? '截至 '+new Date(fd.nav[fd.nav.length-1].t).toLocaleDateString('zh-CN'):'';
+    drawNav('mFundNav', fd);
+    $('mFHint').textContent='累计净值：'+fmt(fd.cum.length?fd.cum[fd.cum.length-1].nav:0,4)+' · 共 '+fd.nav.length+' 条净值记录';
+    return;
+  }
+  // ③ 加载中（等待东方财富返回；不可达时由 fundFail 分支接管）
+  $('mFName').textContent=code; $('mFPrice').textContent='--'; $('mFChg').textContent='--'; $('mFChg').className='flat';
+  $('mFMeta').textContent='场外基金 · 单位净值'; $('mFTime').textContent=''; $('mFSub').textContent='';
+  $('mFHint').textContent='净值加载中…（若长时间无数据，该源可能需要本地服务器环境）';
+  $('mFStat').textContent='东方财富净值加载中…';
+  paintCanvasMsg('mFundNav','净值加载中…', '#999');
 }
 function hideMarketFund(){ const mfd=$('marketFundDetail'); if(mfd) mfd.style.display='none'; }
 
@@ -3253,7 +3291,7 @@ function renderWatch(){
   let html='<table class="wl-table"><thead><tr><th>名称 / 代码</th><th>现价</th><th>涨跌%</th><th>分类</th></tr></thead><tbody>';
   list.forEach(w=>{
     const code=w.code; let name=code, price='--', cp=null, isFund=w.kind==='fund';
-    if(isFund){ const fd=state.fundData[code]; name=fd?fd.name:(CODE_NAMES[code]||code); price=fd?fmt(fd.latest,4):'--'; if(fd&&fd.prev)cp=(fd.latest-fd.prev)/fd.prev*100; }
+    if(isFund){ const fd=state.fundData[code]; name=fd?fd.name:(CODE_NAMES[code]||code); if(state.fundFail&&state.fundFail[code]){ price='—'; cp=null; } else { price=fd?fmt(fd.latest,4):'--'; if(fd&&fd.prev)cp=(fd.latest-fd.prev)/fd.prev*100; } }
     else { const q=state.quotes[code]; if(q){name=q.name;price=fmt(q.price);cp=q.changePct;} }
     const cpTxt = cp==null?'--':pct(cp);
     const sel = code===state.selected?' sel':'';
