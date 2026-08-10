@@ -943,7 +943,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-10r';  // r=修复K线停更在上一交易日(8-07)的bug: 根因是renderAnalysis只在首次!kcache时loadKline, 之后定时刷新refreshQuotes只刷实时报价不碰K线; 新增盘中定时轻量刷新refreshSelectedKline(+tailOnly只拉当日根, 交易时段每120s刷新, 非交易时段仅跨天刷新), 首次加载缓存打_date/_loadedAt戳, onQuotesUpdated顺带触发; 腾讯fqkline盘中实测返回当日(8-10)数据, 故修复后K线实时跟到今天; q/p/o/m/l/k/j/i=历史迭代
+const APP_VER = '2026-08-10s';  // s=修复「创新药等无前缀行业ETF K线崩/白屏」: 根因 loadKline 漏调 normCode, INDUSTRY_POOL/DC_VAL_UNIVERSE 的 code 全是纯数字无 sh/sz 前缀(如159992), 腾讯 fqkline 不认无前缀→返回0根→K线崩; loadKline 入口加 normCode 归一化(159992→sz159992), 机会精选40只行业ETF _kl 全部正常加载(emptyKL=[], 末日=今天), 行情看板K线同步修复; r=修复K线停更在上一交易日(8-07); q/p/o/m/l/k/j/i=历史迭代
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -1381,6 +1381,7 @@ function refreshSelectedKline(){
 
 /* ============ K线：A股/ETF 腾讯前复权; 港/美 新浪 JSONP ============ */
 function loadKline(code, period, cb, opt){
+  code = normCode(code) || code;   // 归一化：纯数字 A股/ETF 补 sh/sz 前缀(如 159992→sz159992)；否则腾讯 fqkline 返回空 → K线崩(本 bug 曾导致创新药等无前缀行业ETF K线白屏/假数据)
   opt = opt || {};
   const reqKey = code+'-'+period;           // 当前请求身份
   if(!opt.ignoreReqKey) state._klineReqKey = reqKey; // 只认最后一次请求（并行批量拉取时忽略该守卫，否则其余请求会被提前 return 永不回调）
