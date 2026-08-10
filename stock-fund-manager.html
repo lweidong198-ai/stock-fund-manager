@@ -943,7 +943,7 @@
 'use strict';
 /* ============ 配置与状态 ============ */
 const CFG = { refreshMs: 5000 };
-const APP_VER = '2026-08-09q';  // q=预测层闭环: ①回测改「按交易日期对齐」(原数组下标对齐混跨年, 致IC虚高/失真)→真实综合IC=-0.20(t=-3.02)且方向稳定为负; ②新增方向自适应校正(flip): 检验前后半段IC均显著为负(t_a=-3.7,t_b=-1.92)→自动取反综合分, 校正后IC=+0.16(t=+3.97), 高分=预期跑赢; ③step=20→10(验证点47个, 满足分段显著阈值); ④预测器最小二乘斜率slope60=2.48(t=3.88)→极端名预测±3%超额, 列表/详情/校准表三处呈现(预测·未来60日跑赢行业均值+X% / 区间 / 跑赢概率 / 置信度); p=新增预测层骨架; o=机会精选重做(三因子+截面z+沪深300中性化+历史RankIC加权); m=修复#marketFundDetail嵌套; l/k/j/i=历史迭代
+const APP_VER = '2026-08-10r';  // r=修复K线停更在上一交易日(8-07)的bug: 根因是renderAnalysis只在首次!kcache时loadKline, 之后定时刷新refreshQuotes只刷实时报价不碰K线; 新增盘中定时轻量刷新refreshSelectedKline(+tailOnly只拉当日根, 交易时段每120s刷新, 非交易时段仅跨天刷新), 首次加载缓存打_date/_loadedAt戳, onQuotesUpdated顺带触发; 腾讯fqkline盘中实测返回当日(8-10)数据, 故修复后K线实时跟到今天; q/p/o/m/l/k/j/i=历史迭代
 // r=全局贯穿十字线: 主图与MACD/KDJ/RSI副图坐标系统一(padL=8/padR=58), 光标竖线贯穿全部图表+副图图例实时显示当前值+副图反向联动主图。
 // q=股票/ETF K线源切换: 新浪不复权→腾讯前复权(qfq), 消除除权/拆分/分红导致的BOLL椭圆/MA/MACD/KDJ/RSI失真; 港股/美股仍走新浪JSONP。
 const CHART_PADL = 8, CHART_PADR = 58;   // 主图/副图共用的左右边距 —— 保证十字线跨图严格对齐，勿单独修改
@@ -1348,7 +1348,36 @@ function onQuotesUpdated(){ renderWatch();
   // 正在填「止盈/止损价」输入框时，跳过持仓表重渲染，避免清空用户正在输入的内容
   if(document.activeElement && document.activeElement.matches && document.activeElement.matches('input[data-ai]')){}
   else renderHold();
-  if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); }
+  if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); refreshSelectedKline(); }
+
+// 交易时段判断（A股）：周一~周五 9:15-11:30 / 13:00-15:00
+function isTradingNow(){
+  const d=new Date(), day=d.getDay();
+  if(day===0||day===6) return false;
+  const hm=d.getHours()*60+d.getMinutes();
+  return (hm>=555 && hm<=690) || (hm>=780 && hm<=900);
+}
+// 盘中定时轻量刷新当前选中标的的当日K线（解决“K线停更在上一交易日”问题）
+function refreshSelectedKline(){
+  const code=state.selected; if(!code) return;
+  const w=state.watch.find(x=>x.code===code); if(!w||w.kind==='fund') return;
+  const key=code+'d', cached=state.kcache[key];
+  const now=Date.now(), today=new Date().toISOString().slice(0,10);
+  const need = !cached || cached._date!==today || (isTradingNow() && (!cached._loadedAt || now-cached._loadedAt>120000));
+  if(!need || refreshSelectedKline._busy) return;
+  refreshSelectedKline._busy=true;
+  loadKline(code,'d',(tail)=>{
+    refreshSelectedKline._busy=false;
+    if(!tail||!tail.length) return;
+    const tbar=tail[tail.length-1];
+    if(tbar.date===today){
+      if(!cached){ state.kcache[key]=tail; }
+      else { const i=cached.findIndex(x=>x.date===today); if(i>=0) cached[i]=tbar; else { cached.push(tbar); cached.sort((a,b)=>a.date<b.date?-1:1); } }
+      if(cached){ cached._date=today; cached._loadedAt=Date.now(); }
+      if(state.view==='analysis') renderAnalysis(); else if(state.view==='market') renderDetail();
+    }
+  },{tailOnly:true, ignoreReqKey:true});
+}
 
 /* ============ K线：A股/ETF 腾讯前复权; 港/美 新浪 JSONP ============ */
 function loadKline(code, period, cb, opt){
@@ -1386,6 +1415,18 @@ function loadKline(code, period, cb, opt){
       });
     };
     const prevDay = ds => { const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()-1); return t.toISOString().slice(0,10); };
+    // 轻量刷新模式：只拉最近若干根（含当日），用于盘中定时更新当日K线，避免每次重拉全部历史
+    if(opt.tailOnly){
+      const turl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+code+','+ptype+','+prevDay(today)+','+today+',8,qfq&_='+Date.now()+Math.random();
+      fetch(turl).then(r=>r.json()).then(j=>{
+        const d=(((j||{}).data||{})[code])||{};
+        const rows=(d[fQ]&&d[fQ].length)?d[fQ]:(d[fR]||[]);
+        const kl=rowsToKl(rows);
+        if(!kl.length){ fin(demoKline(code, period), true); return; }
+        fin(kl, false);
+      }).catch(()=>fin(demoKline(code, period), true));
+      return;
+    }
     // 先拉最新一段 → 立即出图（不让用户等）；随后后台补拉更早历史，到齐后回调刷新
     fetchSeg(today).then(first=>{
       if(!first.length){ fin(demoKline(code, period), true); return; }
@@ -1815,7 +1856,7 @@ function renderAnalysis(){
   head.innerHTML='<span class="big">'+nameOf(code)+'</span><span class="meta">'+code+(w&&w.kind==='fund'?' · 基金':' · 股票/ETF')+'</span><span id="anPrice" style="margin-left:auto;"></span>';
   if(w&&w.kind==='fund' && !state.fundData[code]){ loadFund(code); verdictEl.innerHTML='<div class="empty">基金数据加载中…</div>'; return; }
   if(w&&w.kind!=='fund' && !state.kcache[code+'d']){
-    if(!renderAnalysis._pending){ renderAnalysis._pending=true; loadKline(code,'d',(kl)=>{ renderAnalysis._pending=false; if(kl&&kl.length) state.kcache[code+'d']=kl; renderAnalysis(); }); }
+    if(!renderAnalysis._pending){ renderAnalysis._pending=true; loadKline(code,'d',(kl)=>{ renderAnalysis._pending=false; if(kl&&kl.length){ const k=kl; k._date=new Date().toISOString().slice(0,10); k._loadedAt=Date.now(); state.kcache[code+'d']=k; } renderAnalysis(); }); }
     verdictEl.innerHTML='<div class="empty">K线加载中…</div>'; return;
   }
   const a=analyze(code);
