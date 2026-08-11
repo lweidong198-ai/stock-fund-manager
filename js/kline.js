@@ -33,7 +33,7 @@ function loadKline(code, period, cb, opt){
     }
     cb(sanitizeKline(v), isDemo);   // 过滤周末等脏数据 bar 后再交给绘图/缓存
   };
-  const tm=setTimeout(()=>fin(demoKline(code, period), true), 8000); // 8秒未返回 → 演示数据
+  const tm=setTimeout(()=>fin(demoKline(code, period), true), 15000); // 15秒未返回 → 演示数据（沙箱/慢网络给足时间）
 
   // A股/ETF 用腾讯前复权，消除除权/拆分/分红导致的BOLL/MA/MACD椭圆失真
   if(/^sh|^sz/i.test(code)){
@@ -66,13 +66,17 @@ function loadKline(code, period, cb, opt){
     // 轻量刷新模式：只拉最近若干根（含当日），用于盘中定时更新当日K线，避免每次重拉全部历史
     if(opt.tailOnly){
       const turl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+code+','+ptype+','+prevDay(today)+','+today+',8,qfq&_='+Date.now()+Math.random();
-      fetch(turl).then(r=>r.json()).then(j=>{
+      const fetchTail=(attempt=0)=>fetch(turl).then(r=>r.json()).then(j=>{
         const d=(((j||{}).data||{})[code])||{};
         const rows=(d[fQ]&&d[fQ].length)?d[fQ]:(d[fR]||[]);
         const kl=rowsToKl(rows);
+        if(!kl.length && attempt<2) return new Promise(r=>setTimeout(()=>r(fetchTail(attempt+1)), 300*(attempt+1)));
+        return kl;
+      }).catch(()=> attempt<2 ? new Promise(r=>setTimeout(()=>r(fetchTail(attempt+1)), 300*(attempt+1))) : []);
+      fetchTail().then(kl=>{
         if(!kl.length){ fin(demoKline(code, period), true); return; }
         fin(kl, false);
-      }).catch(()=>fin(demoKline(code, period), true));
+      });
       return;
     }
     // 后台补全更早历史（带重试，抗限流）：resolved 时返回 {all, stopped}
@@ -96,7 +100,9 @@ function loadKline(code, period, cb, opt){
       step();
     });
     // 首屏立即出图，再后台补全历史
-    fetchSeg(today).then(first=>{
+    // 关键：首屏必须用 fetchSegR（带3次退避重试）。沙箱IP常被腾讯WAF偶发限流/返回空，
+    // 旧版 fetchSeg 无重试 → 直接 fallback demoKline（随机价格20-70元），表现为“K线只看到四月份”。
+    fetchSegR(today).then(first=>{
       if(!first.length){ fin(demoKline(code, period), true); return; }
       fin(first, false);                       // 首屏立即渲染
       // 仅当调用方接了 onHistory（详情页交互视图）才做补全+自检；批量扫描不接 onHistory，跳过以免刷屏告警

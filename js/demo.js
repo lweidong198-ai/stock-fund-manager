@@ -38,13 +38,21 @@ function demoQuote(code){
 }
 function demoKline(code, period){
   const wk = period==='w'; const r=mulRng(codeSeed(code)+(wk?7:0)); const n=130; const out=[];
-  let price=+(r()*50+20).toFixed(2); const day=86400000; const step=wk?7:1;
+  // 用实时行情价/昨收作为锚点生成演示K线，避免随机出20-70元这种与标的完全脱节的价格
+  const q = state.quotes && (state.quotes[code] || state.quotes[normCode(code)]);
+  let anchor = q ? (+q.price || +q.prevClose || +q.open) : 0;
+  if(!(anchor>0)){ anchor = /^(50|51|52|56|58|59|15)\d{4}$/.test(String(code).replace(/^(sz|sh)/,'')) ? 1.0 : 10.0; }
+  let price=+(anchor*(0.85+r()*0.30)).toFixed(3);  // 起点在锚点±15%内，看起来更真实
+  const day=86400000; const step=wk?7:1;
   const start=Date.now()-(n-1)*day*step;
-  for(let i=0;i<n;i++){ const open=price; const close=+(price+(r()-0.48)*price*0.03).toFixed(2);
-    const high=+(Math.max(open,close)*(1+r()*0.015)).toFixed(2); const low=+(Math.min(open,close)*(1-r()*0.015)).toFixed(2);
+  for(let i=0;i<n;i++){ const open=price; const close=+(price+(r()-0.48)*price*0.03).toFixed(3);
+    const high=+(Math.max(open,close)*(1+r()*0.015)).toFixed(3); const low=+(Math.min(open,close)*(1-r()*0.015)).toFixed(3);
     const vol=Math.floor(r()*1e6+1e4); const d=new Date(start+i*step*day);
     const dayStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     out.push({date:dayStr,open,high,low,close,vol}); price=close; }
+  // 演示数据最后一根强制贴近当前行情价，避免“演示K线末端与实时行情差太远”
+  if(out.length && q && +q.price>0){ out[out.length-1].close=+q.price; out[out.length-1].high=Math.max(out[out.length-1].high,+q.price); out[out.length-1].low=Math.min(out[out.length-1].low,+q.price); }
+  out._demo = true;
   return out;
 }
 function demoFund(code){
