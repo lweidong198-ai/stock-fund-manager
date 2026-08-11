@@ -554,16 +554,13 @@
     <div class="navitem nav-watch" data-view="market">📊 行情看板</div>
     <div class="navgroup ng-asset"><span class="ng-bar"></span>我的资产</div>
     <div class="navitem nav-asset" data-view="hold">💼 持仓管理</div>
-    <div class="navitem nav-asset" data-view="fund">🔍 机会精选</div>
-    <div class="navgroup ng-decision"><span class="ng-bar"></span>分析决策</div>
-    <div class="navitem nav-decision" data-view="analysis">🧠 建仓分析</div>
-    <div class="navitem nav-decision" data-view="fundAnalysis">📈 基金深度分析</div>
-    <div class="navitem nav-decision" data-view="sectors">🌐 行业趋势扫描</div>
-    <div class="navitem nav-decision" data-view="rotation">🌡️ 行业温度计</div>
-    <div class="navitem nav-decision" data-view="flow">💰 资金流向</div>
+    <div class="navgroup ng-decision"><span class="ng-bar"></span>决策助手</div>
+    <div class="navitem nav-decision" data-view="discovery">🔍 机会发现</div>
+    <div class="navitem nav-decision" data-view="radar">🌐 行业雷达</div>
+    <div class="navitem nav-decision" data-view="timing">🧠 择时建仓</div>
     <div class="navgroup ng-tool"><span class="ng-bar"></span>数据工具</div>
     <div class="navitem nav-tool" data-view="datacenter">🧮 可靠数据中心</div>
-    <div class="navfoot">点自选行→行情页看K线/净值；想看「大师怎么看这只」点「建仓分析」；给基金做体检点「基金深度分析」。</div>
+    <div class="navfoot">点自选行→行情页看K线/净值；想看「大师怎么看这只」在「择时建仓」里点「建仓打分」；给基金做体检在「机会发现」里点「基金体检」。<br><a href="javascript:void(0)" onclick="showView('datacenter')">🧮 可靠数据中心（数据来源说明）</a></div>
   </nav>
 
   <!-- 中栏已移除：自选列表并入行情看板页 viewMarket -->
@@ -722,6 +719,7 @@
     <!-- 基金净值 -->
     <div id="viewFund" class="view fund-page" style="display:none;">
       <div class="fund-side">
+        <div class="subtabbar" data-stb="discovery" style="grid-column:1/-1;"></div>
         <div class="card watch-card">
           <h2>🔍 机会精选 <span class="tag">主动权益基金 · 半年维度</span></h2>
           <div class="opp-toolbar">
@@ -763,6 +761,7 @@
     <!-- 建仓分析 -->
     <div id="viewAnalysis" class="view" style="display:none;">
       <div class="card">
+        <div class="subtabbar" data-stb="timing" style="grid-column:1/-1;"></div>
         <h2>🧠 建仓分析 <span class="tag">集合大师思维框架 · 仅供参考</span></h2>
         <div id="anHead" class="detail-head"></div>
         <div class="disclaimer">⚠️ 本分析仅基于公开技术指标，集合多位投资大师的分析框架用于<b>学习参考</b>，<b>不构成任何投资建议</b>。实际投资请结合自身风险承受力，并咨询持牌专业人士。</div>
@@ -788,6 +787,7 @@
     <!-- 基金深度分析 -->
     <div id="viewFundAnalysis" class="view" style="display:none;">
       <div class="card">
+        <div class="subtabbar" data-stb="discovery" style="grid-column:1/-1;"></div>
         <h2>📈 基金深度分析 <span class="tag">净值统计·风险体检·仅供参考</span></h2>
         <div class="row" id="faInputRow">
           <input class="add-input" id="faInput" placeholder="输入6位基金代码，如 000001 / 110011 / 161725" />
@@ -835,6 +835,7 @@
     <!-- 行业趋势扫描 -->
     <div id="viewSectors" class="view" style="display:none;">
       <div class="card">
+        <div class="subtabbar" data-stb="radar" style="grid-column:1/-1;"></div>
         <h2>🌐 行业趋势扫描 <span class="tag">哪个行业在向上</span></h2>
         <div class="explain" style="margin-top:0;">📈 一键扫描主流行业 ETF 的<b>当日 / 20日 / 60日</b>涨幅，自动标出向上趋势的行业。点「重新扫描」刷新；点某一行可把该 ETF 加进自选观察。</div>
         <div class="row">
@@ -873,6 +874,7 @@
     <!-- 行业温度计 -->
     <div id="viewRotation" class="view" style="display:none;">
       <div class="card">
+        <div class="subtabbar" data-stb="radar" style="grid-column:1/-1;"></div>
         <h2>🌡️ 行业温度计 <span class="tag">只看冷热 · 不构成推荐</span></h2>
         <div class="explain" style="margin-top:0;">🌡️ 这一页只做一件事：把各行业<b>最近热不热</b>排个队（近5日 / 近20日 / 近60日涨跌 + 波动大小），外加一条大盘温度描述。<b>它不排"该买哪个"，也不预测下一步。</b>用来了解板块轮动到哪儿了、自己持仓踩在冷区还是热区。点行可加自选、跳行情看板看细节。</div>
         <div class="row">
@@ -905,6 +907,7 @@
     <!-- 资金流向 -->
     <div id="viewFlow" class="view" style="display:none;">
       <div class="card">
+        <div class="subtabbar" data-stb="timing" style="grid-column:1/-1;"></div>
         <h2>💰 资金流向 <span class="tag">零门槛 · 内外盘主动买卖力道（手动刷新）</span></h2>
         <div class="explain" style="margin-top:0;">📊 用腾讯行情的<b>内外盘</b>（外盘=主动买入成交量、内盘=主动卖出成交量）和<b>五档盘口买卖委托量</b>，刻画出「钱往哪走」的快照。左卡看当前选中标的的资金力道，右表把你的<b>自选 / 持仓</b>一次性排出来，谁在吸金、谁在出货一目了然。<br>⚠ <b>数据口径（诚实说明）</b>：这是资金流向的<b>主动买卖代理指标</b>（基于真实成交的主动买卖分类），<b>不是券商「主力净流入金额」</b>。本视图<b>不跟随全局实时刷新</b>，点底部「↻ 手动刷新资金流向」拉取最新快照，每张卡片均标注「数据时间」，清楚知道是哪一刻的数据。</div>
         <div class="flow-grid">

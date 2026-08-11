@@ -6,16 +6,69 @@
  * ========================================================================= */
 
 /* ============ 视图切换 ============ */
+/* ============ 视图分组（整合：3个决策入口，每组含2个子视图Tab） ============ */
+const VIEW_GROUPS = {
+  discovery: { tabs:[
+    {key:'fund', disp:'grid', render:renderOpportunities},
+    {key:'fundAnalysis', disp:'grid', render:renderFundAnalysis}
+  ], def:'fund' },
+  radar: { tabs:[
+    {key:'sectors', disp:'block', render:renderSectors},
+    {key:'rotation', disp:'block', render:renderRotation}
+  ], def:'sectors' },
+  timing: { tabs:[
+    {key:'analysis', disp:'block', render:renderAnalysis},
+    {key:'flow', disp:'block', render:renderFlow}
+  ], def:'analysis' }
+};
+function setNavOn(v){
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('on', n.dataset.view===v));
+}
 function showView(v, keepNav){
-  ['home','market','hold','fund','analysis','fundAnalysis','sectors','rotation','flow','datacenter'].forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display=(x===v)?((x==='market'||x==='fund')?'grid':'block'):'none'; });
-  if(!keepNav) document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('on', n.dataset.view===v));
+  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter'].forEach(x=>{
+    const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1));
+    if(el) el.style.display=(x===v)?((x==='market'||x==='fund'||x==='fundAnalysis')?'grid':'block'):'none';
+  });
+  if(!keepNav) setNavOn(v);
   state.view=v;
   if(v==='home') renderHome();
   if(v==='hold') renderHold();
-  if(v==='analysis'){ state.anaMode='single'; populateAnSel(); renderAnalysis(); }  // 进入建仓分析视图默认单只研判，组合模式需点按钮重新触发
+  if(v==='analysis'){ state.anaMode='single'; populateAnSel(); renderAnalysis(); }
+}
+function renderSubTabs(g){
+  const cfg=VIEW_GROUPS[g];
+  const cur=(state.subView&&state.subView[g])||cfg.def;
+  const labels={fund:'本期精选',fundAnalysis:'基金体检',sectors:'趋势方向',rotation:'冷热排行',analysis:'建仓打分',flow:'资金流向'};
+  document.querySelectorAll('[data-stb="'+g+'"]').forEach(bar=>{
+    bar.innerHTML = cfg.tabs.map(t=>'<span class="stab'+(t.key===cur?' on':'')+'" onclick="showSub(\''+g+'\',\''+t.key+'\')">'+(labels[t.key]||t.key)+'</span>').join('');
+  });
+}
+function showSub(g, sub){
+  const cfg=VIEW_GROUPS[g];
+  cfg.tabs.forEach(t=>{
+    const el=$('view'+t.key.charAt(0).toUpperCase()+t.key.slice(1));
+    if(el) el.style.display=(t.key===sub)?t.disp:'none';
+  });
+  setNavOn(g);
+  state.view=sub;
+  state.subView=state.subView||{}; state.subView[g]=sub;
+  renderSubTabs(g);
+  const active=cfg.tabs.find(t=>t.key===sub);
+  if(active){
+    if(sub==='analysis'){ state.anaMode='single'; populateAnSel(); }
+    if(typeof active.render==='function') active.render();
+  }
+}
+function enterGroup(g){
+  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter'].forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display='none'; });
+  const sub=(state.subView&&state.subView[g])||VIEW_GROUPS[g].def;
+  showSub(g, sub);
 }
 /* 统一入口：点导航/首页卡片都走这里。智能保证"当前视图能展示当前选中的资产"，避免空白与层次冲突 */
 function goView(v){
+  if(v==='discovery'){ enterGroup('discovery'); return; }
+  if(v==='radar'){ enterGroup('radar'); return; }
+  if(v==='timing'){ enterGroup('timing'); return; }
   if(v==='market'){
     // 行情看板同时支持股票(K线)与基金(净值)，不再强制把基金选中改成股票
     showView('market');
