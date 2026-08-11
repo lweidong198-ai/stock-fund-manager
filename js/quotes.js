@@ -232,14 +232,42 @@ function isTradingNow(){
   const hm=d.getHours()*60+d.getMinutes();
   return (hm>=555 && hm<=690) || (hm>=780 && hm<=900);
 }
+// 用实时行情(qt.gtimg.cn)合成/更新“今日”K线bar。
+// 根因：腾讯 fqkline 日线接口在收盘后数小时才发布当日bar（实测 16:02 末日仍停在上一交易日），
+// 而实时行情接口盘中/收盘后即更新到今日。当缓存末日<今天(或今日bar需随行情刷新)时，
+// 用行情的 开/高/低/收 合成今日bar补入，让K线“看得到今天”。fqkline 后续发布真实当日bar后，
+// refreshOneKline 的合并逻辑按 date 匹配覆盖本合成bar。
+function ensureTodayBar(code, period){
+  const key = normCode(code)+period;
+  const cached = state.kcache[key];
+  if(!cached || !cached.length || cached._demo) return false;
+  const today = todayStr();
+  const lastBar = klineLastDate(cached);
+  if(lastBar > today) return false;                 // 已有比今天更新的bar（异常），不动
+  const q = state.quotes[code] || state.quotes[normCode(code)] || state.quotes[key.slice(0,-1)];
+  if(!q || !q.time) return false;
+  const qd = String(q.time).replace(/\D/g,'').slice(0,8);
+  if(qd !== today.replace(/-/g,'')) return false;   // 实时行情不是今日（周末/停牌/非交易），不合成，防误植
+  const o=+q.open, h=+q.high, l=+q.low, c=+q.price, v=+(q.volume||q.amount||0);
+  if(!(o>0 && h>0 && l>0 && c>0 && h>=o && h>=c && l<=o && l<=c)) return false;
+  if(lastBar===today && cached._todaySynthAt === q.time) return false; // 已用该行情时间戳合成过，跳过
+  const existing = cached.find(x=>x.date===today);
+  if(existing){ existing.open=o; existing.high=h; existing.low=l; existing.close=c; existing.vol=v; }
+  else { cached.push({date:today, open:o, high:h, low:l, close:c, vol:v}); cached.sort((a,b)=>a.date<b.date?-1:1); }
+  cached._todaySynthAt = q.time;
+  markKlineDate(cached);
+  return true;
+}
+
 // 跨日/盘中：把「所有已缓存、但最新 bar 日期 < 今天」的K线补刷到今天（修复“除选中股外其余K线停在上一交易日”）
 // 旧版仅刷选中股，导致自选/机会列表的K线永远停在批量拉取那一刻；现改为按缓存里每一只标的逐个补刷。
-// 分批限流(每批4只、间隔120ms)避免触发腾讯同IP限流；命中限流返回演示数据则不动缓存，下一轮自动重试自愈。
+// 分两类：① 真实历史缺今日bar（腾讯fqkline常滞后数小时）→ 网络 tailOnly 拉取 + 行情兜底合成；
+//         ② 今日bar已存在、但实时行情有更新（盘中跳动/收盘后最终价）→ 仅用行情刷新今日bar，不拉网络。
+// 分批限流(每批4只、间隔120ms)避免触发腾讯同IP限流；命中限流返回演示数据则先用行情兜底、否则3秒后重试一次。
 function refreshKlinesToToday(){
   if(refreshKlinesToToday._busy) return;
   const now=Date.now(); const today=todayStr();
-  const trading=isTradingNow(), sel=state.selected;
-  const tasks=[];
+  const tasks=[], sync=[];
   for(const key in state.kcache){
     if(!/[dw]$/.test(key)) continue;                 // 仅处理日/周K
     const cached=state.kcache[key];
@@ -248,13 +276,19 @@ function refreshKlinesToToday(){
     const w=(state.watch.find(x=>x.code===code)||state.hold.find(x=>x.code===code));
     if(w&&w.kind==='fund') continue;                 // 基金无K线
     const lastBar = klineLastDate(cached);
-    const needDay = !lastBar || lastBar < today;     // 以最新 bar 日期为准，避免“假刷新”后卡住
-    const needIntra = code===sel && trading && (!cached._loadedAt || now-cached._loadedAt>120000);
-    if(needDay||needIntra) tasks.push({code,period,cached});
+    const q = state.quotes[code] || state.quotes[normCode(code)];
+    const qToday = q && q.time && String(q.time).replace(/\D/g,'').slice(0,8) === today.replace(/-/g,'');
+    if(lastBar < today){
+      tasks.push({code,period,cached});              // 真实历史缺今日bar（fqkline滞后）→ 网络补拉 + 行情兜底合成
+    } else if(lastBar === today && qToday && cached._todaySynthAt !== q.time){
+      sync.push({code,period,cached});               // 今日bar已在，行情有更新（盘中/收盘后）→ 仅用行情刷新
+    }
   }
-  if(!tasks.length) return;
+  const total = tasks.length + sync.length;
+  if(!total) return;
   refreshKlinesToToday._busy=true;
-  console.log('[K线刷新] 启动补刷，标的数=', tasks.length, 'today=', today);
+  console.log('[K线刷新] 启动补刷，标的数=', total, '(网络='+tasks.length+', 行情合成='+sync.length+')', 'today=', today);
+  sync.forEach(({code,period,cached})=> ensureTodayBar(code, period));   // 行情合成无网络，先快处理
   let i=0; const BATCH=4, GAP=120;
   const step=()=>{
     const slice=tasks.slice(i,i+BATCH); i+=BATCH;
@@ -268,28 +302,31 @@ function refreshOneKline(code, period, cached){
   if(!cached) cached=state.kcache[code+period];
   if(!cached||!cached.length||cached._demo) return;
   const today=todayStr();
+  const redrawIfSel=()=>{ if(code===state.selected){ if(state.view==='analysis') renderAnalysis(); else if(state.view==='market'||state.view==='detail') renderDetail(); } };
   console.log('[K线刷新] 补刷', code, period, '当前最新=', klineLastDate(cached), '目标>=', today);
   loadKline(code, period, (tail, isDemo)=>{
-    if(isDemo||!tail||!tail.length){
-      console.log('[K线刷新] 未拿到数据', code, period, isDemo?'演示':'空', '→3秒后重试');
-      // 限流/无数据：3秒后重试一次，提升自愈概率；仍失败则下一轮行情刷新再试
+    let updated=false;
+    if(!(isDemo||!tail||!tail.length)){
+      tail.forEach(b=>{
+        const idx=cached.findIndex(x=>x.date===b.date);
+        if(idx>=0){ cached[idx]=b; updated=true; }     // 真实当日bar发布后按 date 覆盖合成bar
+        else if(b.date>cached[cached.length-1].date){ cached.push(b); updated=true; }
+      });
+      if(updated) cached.sort((a,b)=>a.date<b.date?-1:1);
+    } else {
+      console.log('[K线刷新] 未拿到数据', code, period, isDemo?'演示':'空', '→先用实时行情兜底');
+    }
+    // 用实时行情兜底合成/更新今日bar（fqkline滞后时无今日bar，行情是今日唯一来源；发布后按 date 覆盖）
+    const changed=ensureTodayBar(code, period);
+    markKlineDate(cached);
+    if(updated||changed){ const nl=klineLastDate(cached); console.log('[K线刷新] 完成', code, period, '最新=', nl, nl>=today?'✓':'✗'); redrawIfSel(); }
+    if(window.DataCalibrator) DataCalibrator.reportKline(code, DataCalibrator.checkKline(code, cached));
+    // 既无真实当日bar、行情也无法合成（限流/无数据）→ 3秒后重试一次，提升自愈
+    if(!(updated||changed)){
       if(!refreshOneKline._retry) refreshOneKline._retry={};
       const rk=code+period;
       if(!refreshOneKline._retry[rk]){ refreshOneKline._retry[rk]=true; setTimeout(()=>{ refreshOneKline._retry[rk]=false; refreshOneKline(code, period, cached); }, 3000); }
-      return;
     }
-    let updated=false;
-    tail.forEach(b=>{
-      const idx=cached.findIndex(x=>x.date===b.date);
-      if(idx>=0){ cached[idx]=b; updated=true; }
-      else if(b.date>cached[cached.length-1].date){ cached.push(b); updated=true; }
-    });
-    if(updated) cached.sort((a,b)=>a.date<b.date?-1:1);
-    markKlineDate(cached);                            // _date = 最新 bar 日期；若今日 bar 仍未出则保持旧日，继续刷新
-    const newLast=klineLastDate(cached);
-    console.log('[K线刷新] 完成', code, period, '合并后最新=', newLast, newLast>=today?'✓':'✗ 仍将继续刷新');
-    if(code===state.selected){ if(state.view==='analysis') renderAnalysis(); else if(state.view==='market'||state.view==='detail') renderDetail(); }
-    if(window.DataCalibrator) DataCalibrator.reportKline(code, DataCalibrator.checkKline(code, cached));
   }, {tailOnly:true, ignoreReqKey:true});
 }
 

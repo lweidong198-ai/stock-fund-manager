@@ -3,7 +3,7 @@
 // 用 Node vm 单 context 执行真实模块代码（避免 jsdom 逐个 script 注入时 let/const/函数声明不跨脚本共享的怪癖）。
 const fs=require('fs'), path=require('path'), vm=require('vm');
 const ROOT='C:/Users/Mloong/stock-fund-manager';
-const ORDER=['config.js','utils.js','kline.js','sectors.js'];
+const ORDER=['config.js','utils.js','kline.js','quotes.js','sectors.js'];
 
 // 受控时钟：今天固定为 2026-08-11（避免 Node 真实日期干扰 _date 断言）
 function makeFakeDate(){ const R=Date; function F(...a){ return a.length? new R(...a): new R('2026-08-11T10:30:00+08:00'); } F.now=()=>new R('2026-08-11T10:30:00+08:00').getTime(); F.prototype=R.prototype; return F; }

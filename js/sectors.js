@@ -83,6 +83,7 @@ function loadKlineP(code, period){
       if(!existing || !existing.length || existing.length < kl.length){  // 不覆盖更完整的缓存（如详情页已补全历史）
         markKlineDate(kl); state.kcache[key]=kl;
       } else { markKlineDate(existing); }   // 已有更完整缓存，仅刷新日期标记
+      if(typeof ensureTodayBar==='function') ensureTodayBar(code, period);   // 行情兜底合成今日bar：fqkline滞后时行业ETF K线仍停在上一交易日
     }
     res(kl);
   }, {ignoreReqKey:true}));
