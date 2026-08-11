@@ -76,7 +76,12 @@ function adjustSplits(kl){
 // （否则行业模块只在进视图时拉一次，跨日不自愈，会停在旧交易日）。
 function loadKlineP(code, period){
   const key = normCode(code)+period;
-  return new Promise(res=>loadKline(code, period, raw=>{
+  state._demoKL = state._demoKL || {};
+  return new Promise(res=>loadKline(code, period, (raw, isDemo)=>{
+    // 连不上（腾讯接口超时/被限流）→ 绝不返回假数据：直接标记并 resolve(null)，
+    // 上层将显示「连不上」占位，而非 demoKline 的随机游走假趋势。
+    if(isDemo){ state._demoKL[key]=true; res(null); return; }
+    delete state._demoKL[key];
     const kl = adjustSplits(raw);
     if(kl && kl.length){
       const existing = state.kcache[key];
@@ -301,14 +306,23 @@ async function renderSectors(){
   let bench60=null;
   try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){ console.warn('bench failed', e); }
   // 每只 ETF 拉日K线算 5/20/60 日涨幅 + 量价配合（腾讯前复权，零Key）
+  state._demoCodes = new Set();   // 本次扫描中连不上的行业（用于醒目横幅）
   const rows=await Promise.all(POOL.map(async x=>{
     const kl=await loadKlineP(x.code,'d');
     const q=quotes[normCode(x.code)]||{};
+    const klMiss = !kl;
     const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);
-    const vol=sectorVolume(kl, c20);
-    return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct||0), c5:c5, c20:c20, c60:c60, vol:vol, ind:computeSectorIndicators(kl), rel60:(c60==null||bench60==null)?null:(c60-bench60), score:null, phase:'', _kl:kl };
+    const vol=klMiss?{cls:'vol-flat',label:'连不上'}:sectorVolume(kl, c20);
+    return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct==null?null:(q.changePct||0)), c5:c5, c20:c20, c60:c60, vol:vol, ind:computeSectorIndicators(kl), rel60:(c60==null||bench60==null)?null:(c60-bench60), score:null, phase:'', _kl:kl, klMiss:klMiss };
   }));
   rows.forEach(r=>{ r._F=sectorForecast(r, r.vol.cls, r.rel60, r.ind); });
+  // 连不上清单（用于醒目横幅，绝不显示假数据）
+  const demoFails = rows.filter(r=>r.klMiss).map(r=>r.name);
+  let demoWarn='';
+  if(demoFails.length){
+    const head = demoFails.slice(0,8).join('、') + (demoFails.length>8?' 等':'');
+    demoWarn='<div class="demo-warn">⚠️ 行情接口连不上：'+demoFails.length+' 个行业（'+head+'）无法获取真实K线，<b>已隐藏其假数据</b>，表中标灰行为「连不上」。当日% 若正常显示则为真实行情，<b>请勿参考其趋势列</b>。请检查网络后点「重新扫描」。</div>';
+  }
   // 注：原「滚动自适应校准→上涨概率」已移除（回测证实综合分对未来涨跌近无预测力），本页不再输出概率。
   // 排序：技术强弱分降序（数据不足排最后）
   rows.sort((a,b)=>{ const va=a._F.score==null?-1e9:a._F.score, vb=b._F.score==null?-1e9:b._F.score; return vb-va; });
@@ -339,26 +353,32 @@ async function renderSectors(){
   const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th></tr></thead>';
   const watchSet=new Set(loadSectorWatch());
   const body=rows.map((r,i)=>{
-    const L=sectorLight(r);
-    const F=r._F;
-    r.phase=F.phase;
+    const miss=r.klMiss;
+    const L=miss?{cls:'s-unknown',label:'连不上',dot:'#bbb'}:sectorLight(r);
+    const F=miss?{cls:'s-unknown',label:'连不上',conf:''}:r._F;
+    r.phase=miss?'':F.phase;
     delete r._kl;
     const confDot=(F.conf)?'<span class="conf-dot conf-'+F.conf+'" title="信号一致度：'+F.conf+'"></span>':'';
+    const dayCls=r.day==null?'':(r.day>=0?'up':'down');
     const day=r.day==null?'--':(r.day>=0?'+':'')+r.day.toFixed(2)+'%';
     const c20=r.c20==null?'--':(r.c20>=0?'+':'')+r.c20.toFixed(2)+'%';
     const c60=r.c60==null?'--':(r.c60>=0?'+':'')+r.c60.toFixed(2)+'%';
+    const c20Cls=r.c20==null?'':(r.c20>=0?'up':'down');
+    const c60Cls=r.c60==null?'':(r.c60>=0?'up':'down');
     const sc=scoreColor(F.score);
-    const volCell='<td><span class="vol-tag '+r.vol.cls+'">'+r.vol.label+'</span></td>';
-    return '<tr data-code="'+r.code+'"><td><span class="rank">'+(i+1)+'</span></td>'
+    const scoreTxt=F.score==null?'—':F.score;
+    const volCell=miss?'<td>—</td>':'<td><span class="vol-tag '+r.vol.cls+'">'+r.vol.label+'</span></td>';
+    return '<tr data-code="'+r.code+'"'+(miss?' class="row-miss"':'')+'>'
+      +'<td><span class="rank">'+(i+1)+'</span></td>'
       +'<td><span class="star '+(watchSet.has(r.code)?'on':'')+'" data-code="'+r.code+'">★</span>'+r.name+(r._badge?' <span class="regime-badge '+regime+'">'+r._badge+'</span>':'')+'</td><td>'+r.etf+' <span class="cd" style="font-size:11px;color:var(--sub);">'+r.code+'</span></td>'
-      +'<td class="'+(r.day>=0?'up':'down')+'">'+day+'</td>'
-      +'<td class="'+(r.c20>=0?'up':'down')+'">'+c20+'</td>'
-      +'<td class="'+(r.c60>=0?'up':'down')+'">'+c60+'</td>'
+      +'<td class="'+dayCls+'">'+day+'</td>'
+      +'<td class="'+c20Cls+'">'+c20+'</td>'
+      +'<td class="'+c60Cls+'">'+c60+'</td>'
       +'<td class="'+L.cls+'"><span class="s-light" style="background:'+L.dot+'"></span>'+L.label+'</td>'
       +'<td class="'+F.cls+'">'+confDot+F.label+(F.phase?' <span class="phase">'+F.phase+'</span>':'')+'</td>'
-      +'<td class="prob-cell conf-'+F.conf+'" style="color:'+sc+';">'+F.score+'</td>'+volCell+'</tr>';
+      +'<td class="prob-cell conf-'+(F.conf||'')+'" style="color:'+sc+';">'+scoreTxt+'</td>'+volCell+'</tr>';
   }).join('');
-  $('sectorsBanner').innerHTML=regimeBanner;
+  $('sectorsBanner').innerHTML=demoWarn+regimeBanner;
   box.innerHTML='<table class="sectors">'+head+'<tbody>'+body+'</tbody></table>';
   const rev=detectReversal(rows);
   const al=$('sectorAlert');

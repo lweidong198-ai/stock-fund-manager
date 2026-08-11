@@ -426,14 +426,23 @@ async function renderRotation() {   // 函数名保留，供 app.js 既有接线
       name: x.name, code: x.code, etf: x.etf,
       day: (q.changePct == null ? null : q.changePct),
       c5: klinePct(kl, 5), c20: klinePct(kl, 20), c60: klinePct(kl, 60),
-      volAnn: (ind && ind.vol) ? ind.vol.ann : null
+      volAnn: (ind && ind.vol) ? ind.vol.ann : null,
+      klMiss: !kl
     };
   }));
 
-  THERMO.rows = rows.filter(r => r.c20 != null || r.c60 != null);
+  const demoFails = rows.filter(r => r.klMiss).map(r => r.name);
+  let demoWarn = '';
+  if (demoFails.length) {
+    const head = demoFails.slice(0, 8).join('、') + (demoFails.length > 8 ? ' 等' : '');
+    demoWarn = '<div class="demo-warn">⚠️ 行情接口连不上：' + demoFails.length + ' 个行业（' + head + '）无法获取真实K线，<b>已隐藏其假数据</b>，表中标灰行为「连不上」。当日% 若正常显示则为真实行情，<b>请勿参考其趋势列</b>。请检查网络后点「重新读取」。</div>';
+  }
+
+  THERMO.rows = rows;   // 保留全部行（含连不上的 klMiss），渲染时标灰显示「连不上」，便于看出哪些行业掉线
   THERMO.regime = (bench60 == null) ? 'unknown' : (bench60 > 5 ? 'bull' : (bench60 < -5 ? 'bear' : 'flat'));
   THERMO.bench = { b5: bench5, b20: bench20, b60: bench60 };
   THERMO.pos1y = pos1y;
+  THERMO.demoWarn = demoWarn;
   _renderThermo();
   const tt = $('rotationTime'); if (tt) tt.textContent = '更新 ' + ts();
 }
@@ -494,10 +503,11 @@ function _renderThermo() {
     + '<th>冷热</th></tr></thead>';
 
   const body = sorted.map((r, i) => {
-    const hot = _heatCls(r.c20, all20);
-    const label = { 'heat-hot': '🔥 很热', 'heat-warm': '🌤 偏热', 'heat-mid': '⬜ 一般', 'heat-cool': '🌥 偏冷', 'heat-cold': '❄️ 很冷' }[hot] || '--';
-    const warn = warnSet[r.code] ? ' <span class="thermo-warn" title="牛市中波动最高的25%行业，实测显著跑输，属风险提示">⚠ 高波</span>' : '';
-    return '<tr data-code="' + r.code + '"><td><span class="rank">' + (i + 1) + '</span></td>'
+    const miss = r.klMiss;
+    const hot = miss ? '' : _heatCls(r.c20, all20);
+    const label = miss ? '连不上' : ({ 'heat-hot': '🔥 很热', 'heat-warm': '🌤 偏热', 'heat-mid': '⬜ 一般', 'heat-cool': '🌥 偏冷', 'heat-cold': '❄️ 很冷' }[hot] || '--');
+    const warn = (!miss && warnSet[r.code]) ? ' <span class="thermo-warn" title="牛市中波动最高的25%行业，实测显著跑输，属风险提示">⚠ 高波</span>' : '';
+    return '<tr data-code="' + r.code + '"' + (miss ? ' class="row-miss"' : '') + '><td><span class="rank">' + (i + 1) + '</span></td>'
       + '<td>' + r.name + warn + '</td>'
       + '<td>' + r.etf + ' <span class="cd" style="font-size:11px;color:var(--sub);">' + r.code + '</span></td>'
       + '<td class="' + (r.day == null ? '' : (r.day >= 0 ? 'up' : 'down')) + '">' + _pf(r.day) + '</td>'
@@ -523,7 +533,7 @@ function _renderThermo() {
   box.innerHTML = '<div class="rot-cands"><div class="rot-h">🌡️ 全部 ' + rows.length + ' 个行业冷热排队 <span style="color:var(--sub);font-weight:400;">（当前按' + ({ c5: '近5日', c20: '近20日', c60: '近60日', volAnn: '年化波动' }[key]) + '从高到低）</span></div>'
     + '<table class="sectors">' + head + '<tbody>' + body + '</tbody></table>' + warnBlk + foot + '</div>';
 
-  const bn = $('rotationBanner'); if (bn) bn.innerHTML = _thermoBanner();
+  const bn = $('rotationBanner'); if (bn) bn.innerHTML = (THERMO.demoWarn || '') + _thermoBanner();
 
   box.querySelectorAll('tr[data-code]').forEach(tr => tr.onclick = () => {
     const code = normCode(tr.dataset.code) || tr.dataset.code;
