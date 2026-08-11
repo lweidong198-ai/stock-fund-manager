@@ -77,3 +77,36 @@ function klineLastDate(kl){ return (kl && kl.length) ? kl[kl.length-1].date : nu
    这样当 tailOnly 没拿到今日 bar 时，_date 仍停留在旧日，下次刷新会继续补刷，避免“假刷新”后永远卡住。 */
 function markKlineDate(kl){ if(kl && kl.length){ kl._date=klineLastDate(kl); kl._loadedAt=Date.now(); } }
 
+/* 用 K 线收盘价自动校准实时行情价格的单位（元 vs 分）。
+   腾讯 qt.gtimg.cn 对 ETF/LOF 的价格字段单位不统一：有些返回“分”（如 sh515050 返回 105.26），
+   有些返回“元”（如 sz159608 返回 0.55）。不能按代码前缀硬除，必须以 K 线（fqkline，单位元）为基准。
+   逻辑：取 K 线缓存最近 5 根收盘价均值 kAvg，计算 ratio=quote.price/kAvg。
+   - ratio > 30：行情价被放大约 100 倍，按 ÷100 校准。
+   - ratio < 0.03：行情价被缩小约 100 倍，按 ×100 校准（罕见）。
+   - 否则不动。对 quote 的 price/open/high/low/prevClose/limitUp/limitDown 及 bid/ask 价格统一缩放。
+   幂等：校准后 ratio 会回到 1 附近，重复调用不会二次缩放。 */
+function calibrateQuoteToKline(code, quote){
+  if(!quote || !quote.price) return quote;
+  const key=(code+'d');
+  const kl=state.kcache[key] || state.kcache[normCode(code)+'d'];
+  if(!kl || !kl.length || kl._demo) return quote;
+  const tail=kl.slice(-5).filter(x=>x && x.close>0);
+  if(!tail.length) return quote;
+  const kAvg=tail.reduce((s,x)=>s+x.close,0)/tail.length;
+  if(!(kAvg>0)) return quote;
+  const ratio=quote.price/kAvg;
+  if(ratio>30) return scaleQuotePrices(quote, 0.01);
+  if(ratio<0.03) return scaleQuotePrices(quote, 100);
+  return quote;
+}
+function scaleQuotePrices(quote, factor){
+  if(!quote || !(factor>0)) return quote;
+  const fields=['price','open','high','low','prevClose','limitUp','limitDown','change'];
+  fields.forEach(f=>{ if(typeof quote[f]==='number' && !isNaN(quote[f])) quote[f]*=factor; });
+  ['ask','bid'].forEach(side=>{
+    if(Array.isArray(quote[side])) quote[side]=quote[side].map(lvl=>[typeof lvl[0]==='number'?lvl[0]*factor:lvl[0], typeof lvl[1]==='number'?lvl[1]:lvl[1]]);
+  });
+  // 振幅%、涨跌幅%、换手率、成交量、成交额 是比率/绝对量，不缩放
+  return quote;
+}
+

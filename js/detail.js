@@ -8,6 +8,7 @@
 /* ============ 详情（股票） ============ */
 function renderDetailHead(){
   const code=state.selected; const w=state.watch.find(x=>x.code===code); if(!w) return;
+  if(state.quotes[code]) calibrateQuoteToKline(code, state.quotes[code]);
   const q=state.quotes[code];
   $('dName').textContent=q?q.name:code;
   $('dPrice').textContent=q?fmt(q.price):'--';
@@ -34,7 +35,9 @@ function renderDetail(){
   $('klineMain').style.display='block';
   const key=code+state.period; const kl=state.kcache[key];
   // 立即绘制（不依赖 requestAnimationFrame，避免某些浏览器/环境下回调不触发导致空白）
-  const drawNow=(data)=>{ try{ state.kcache[key]=data; ensureTodayBar(code, state.period); markKlineDate(data); chartStat('图表：K线已加载，绘制中…', null); drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
+  const drawNow=(data)=>{ try{ state.kcache[key]=data; ensureTodayBar(code, state.period); markKlineDate(data); chartStat('图表：K线已加载，绘制中…', null); // K线到位后立即校准行情价格单位（ETF 行情“分/元”不统一）
+      if(state.quotes[code]) calibrateQuoteToKline(code, state.quotes[code]);
+      drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
   if(kl && kl.length){
     if(kl._demo) $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     else $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';

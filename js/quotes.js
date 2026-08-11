@@ -9,13 +9,6 @@
 function parseTencent(text){
   const out={};
   const re=/v_(\w+)="([^"]*)"/g; let m;
-  // 腾讯实时行情对 ETF/LOF/债券等低价标的以"分"为单位返回，对股票/指数以"元"返回。
-  // 特征：6位代码且以 50/51/52/56/58/59(沪) 或 15(深) 开头。剥掉前缀后判断。
-  const isCentUnit=(code)=>{
-    const bare=String(code||'').replace(/^(sz|sh|hk|us)/i,'');
-    return /^\d{6}$/.test(bare) && /^(50|51|52|56|58|59|15)\d{4}$/.test(bare);
-  };
-  const norm=(v,c)=>{ const n=parseFloat(v); return isCentUnit(c)?n/100:n; };
   while((m=re.exec(text))){
     const code=m[1]; const f=m[2].split('~');
     if(f.length<35){
@@ -26,14 +19,14 @@ function parseTencent(text){
       continue;
     }
     out[code]={
-      code, name:f[1]||code, price:norm(f[3],code), prevClose:norm(f[4],code),
-      open:norm(f[5],code), time:f[30]||'', change:parseFloat(f[31]), changePct:parseFloat(f[32]),
-      high:norm(f[33],code), low:norm(f[34],code), volume:parseFloat(f[36]), amount:parseFloat(f[37]),
+      code, name:f[1]||code, price:parseFloat(f[3]), prevClose:parseFloat(f[4]),
+      open:parseFloat(f[5]), time:f[30]||'', change:parseFloat(f[31]), changePct:parseFloat(f[32]),
+      high:parseFloat(f[33]), low:parseFloat(f[34]), volume:parseFloat(f[36]), amount:parseFloat(f[37]),
       turnover:parseFloat(f[38]), pe:parseFloat(f[39]), amplitude:parseFloat(f[43]),
-      mktCap:parseFloat(f[45]), pb:parseFloat(f[46]), limitUp:norm(f[47],code), limitDown:norm(f[48],code),
+      mktCap:parseFloat(f[45]), pb:parseFloat(f[46]), limitUp:parseFloat(f[47]), limitDown:parseFloat(f[48]),
       outer:parseFloat(f[7])||0, inner:parseFloat(f[8])||0,
-      ask:[[f[19],f[20]],[f[21],f[22]],[f[23],f[24]],[f[25],f[26]],[f[27],f[28]]].map(x=>[norm(x[0],code),parseFloat(x[1])]),
-      bid:[[f[9],f[10]],[f[11],f[12]],[f[13],f[14]],[f[15],f[16]],[f[17],f[18]]].map(x=>[norm(x[0],code),parseFloat(x[1])])
+      ask:[[f[19],f[20]],[f[21],f[22]],[f[23],f[24]],[f[25],f[26]],[f[27],f[28]]].map(x=>[parseFloat(x[0]),parseFloat(x[1])]),
+      bid:[[f[9],f[10]],[f[11],f[12]],[f[13],f[14]],[f[15],f[16]],[f[17],f[18]]].map(x=>[parseFloat(x[0]),parseFloat(x[1])])
     };
   }
   return out;
@@ -198,6 +191,9 @@ function refreshQuotes(cb){
       const d=parseTencent(text);
       if(Object.keys(d).length===0){ useDemoQuotes(stockCodes); done(); return; }
       Object.assign(state.quotes, d);
+      // 用已缓存的 K 线校准行情价格单位：腾讯 qt 对 ETF 有时返回“分”、有时返回“元”，
+      // 不能按代码前缀硬除，必须以 K 线（fqkline，单位元）为基准自动对齐。
+      Object.keys(d).forEach(c=>{ if(state.quotes[c]) calibrateQuoteToKline(c, state.quotes[c]); });
       setDemo(false); setDataStatus('ok');
       done();
     }).catch(err=>{ clearTimeout(t); useDemoQuotes(stockCodes); done(); });
@@ -215,7 +211,7 @@ function ensureStockQuote(code){
     fetch(url).then(r=>r.arrayBuffer()).then(buf=>{
       const text=new TextDecoder('gb18030').decode(buf);
       const d=parseTencent(text);
-      if(d[code]){ state.quotes[code]=d[code]; onQuotesUpdated(); }
+      if(d[code]){ state.quotes[code]=d[code]; calibrateQuoteToKline(code, state.quotes[code]); onQuotesUpdated(); }
       res(true);
     }).catch(()=>res(false));
   });
@@ -251,8 +247,9 @@ function ensureTodayBar(code, period){
   const today = todayStr();
   const lastBar = klineLastDate(cached);
   if(lastBar > today) return false;                 // 已有比今天更新的bar（异常），不动
-  const q = state.quotes[code] || state.quotes[normCode(code)] || state.quotes[key.slice(0,-1)];
+  let q = state.quotes[code] || state.quotes[normCode(code)] || state.quotes[key.slice(0,-1)];
   if(!q || !q.time) return false;
+  q = calibrateQuoteToKline(code, q);               // 先对齐 K 线单位：有些 ETF 返回“分”、有些返回“元”
   const qd = String(q.time).replace(/\D/g,'').slice(0,8);
   if(qd !== today.replace(/-/g,'')) return false;   // 实时行情不是今日（周末/停牌/非交易），不合成，防误植
   const o=+q.open, h=+q.high, l=+q.low, c=+q.price, v=+(q.volume||q.amount||0);

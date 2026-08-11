@@ -1,16 +1,16 @@
 /* =========================================================================
  * verify_ensure_today.js —— 真根因验收：腾讯 fqkline 滞后时，用实时行情合成今日K线bar
+ * 并验证 ETF/LOF 实时行情价格单位自动校准（分 vs 元）。
  *
  * 背景（boss 真实反馈）：添加 515050 后 K 线仍停在 8/10。根因不是刷新链/缓存，
  * 而是腾讯日K线接口在收盘后数小时才发布当日bar，而实时行情(qt.gtimg.cn)已到今天。
- * 之前 mock 测试假设“源里必有 8/11”，所以全绿却没查出真问题。
+ * 此外腾讯 qt 对 ETF 的价格字段单位不统一：有些返回“分”（105.26）、有些返回“元”（0.55），
+ * 必须以 K 线（fqkline，单位元）为基准自动校准，不能按代码前缀硬除。
  *
- * 本测试不 mock loadKline，而是直接构造：
+ * 本测试构造：
  *   - 一段停在 8/10 的 K 线缓存（模拟 fqkline 滞后）
  *   - 一条“今天 8/11、带真实 OHLC”的实时行情（模拟 qt 已更新）
- * 然后断言 ensureTodayBar() 确实用行情合成出 8/11 那根 bar 并写回缓存。
- *
- * 用法：node verify_ensure_today.js
+ * 然后断言 ensureTodayBar() 用行情合成出 8/11 bar，并自动校准行情价格单位。
  * ========================================================================= */
 const fs = require('fs');
 const path = require('path');
@@ -49,13 +49,13 @@ function realQuote(time, o, h, l, c, v){
 
   const ev = (code) => window.eval(code);
 
-  // 场景1：K线停在 8/10，实时行情是今天 8/11（收盘后典型场景）
+  // 场景1：K线停在 8/10（close≈1.0，与真实ETF价一致），实时行情是今天 8/11（元单位）
   ev("state.quotes={}; state.kcache={};");
   ev("state.quotes['sh515050']="+JSON.stringify(realQuote('2026/08/11 16:02:00', 1.007, 1.038, 0.995, 1.017, 1234567))+";");
-  ev("state.kcache['sh515050d']="+JSON.stringify([bar('2026-08-08',100),bar('2026-08-09',100.5),bar('2026-08-10',101)])+";");
+  ev("state.kcache['sh515050d']="+JSON.stringify([bar('2026-08-08',1.00),bar('2026-08-09',1.005),bar('2026-08-10',1.010)])+";");
   ev("state.kcache['sh515050d']._date='2026-08-10';");
 
-  const r1 = ev("ensureTodayBar('sh515050','d')");
+  const r1 = ev("ensureTodayBar('sh515050','d')")
   const k1 = ev("state.kcache['sh515050d']");
   const last1 = k1[k1.length-1];
   check('S1 ensureTodayBar 返回 true（成功合成今日bar）', r1===true, 'return='+r1);
@@ -88,7 +88,29 @@ function realQuote(time, o, h, l, c, v){
   const r5 = ev("ensureTodayBar('sh999999','d')");
   check('S11 演示/空缓存不合成', r5===false, 'return='+r5);
 
-  console.log('\n==== ensureTodayBar 真根因验收（行情合成今日bar）====');
+  // 场景6：行情返回“分”单位（price=105.26），K线是元（close≈1.0）→ 自动 ÷100 校准
+  ev("state.quotes={}; state.kcache={};");
+  ev("state.quotes['sh515050']="+JSON.stringify(realQuote('2026/08/11 16:02:00', 100.7, 106.0, 99.5, 105.26, 1234567))+";");
+  ev("state.kcache['sh515050d']="+JSON.stringify([bar('2026-08-08',1.00),bar('2026-08-09',1.005),bar('2026-08-10',1.010)])+";")
+  ev("state.kcache['sh515050d']._date='2026-08-10';");
+  const r6 = ev("ensureTodayBar('sh515050','d')");
+  const k6 = ev("state.kcache['sh515050d']");
+  const last6 = k6[k6.length-1];
+  const q6 = ev("state.quotes['sh515050']");
+  check('S12 行情“分”单位时自动÷100并合成正确bar', r6===true && Math.abs(last6.close-1.0526)<1e-9 && Math.abs(last6.open-1.007)<1e-9 && Math.abs(last6.high-1.06)<1e-9 && Math.abs(last6.low-0.995)<1e-9, 'C='+last6.close+' H='+last6.high+' q.price='+q6.price);
+
+  // 场景7：行情返回“元”单位（price=0.55），K线也是元（close≈0.55）→ 不缩放
+  ev("state.quotes={}; state.kcache={};");
+  ev("state.quotes['sz159608']="+JSON.stringify(realQuote('2026/08/11 16:02:00', 0.54, 0.56, 0.53, 0.55, 987654))+";");
+  ev("state.kcache['sz159608d']="+JSON.stringify([bar('2026-08-08',0.53),bar('2026-08-09',0.54),bar('2026-08-10',0.545)])+";");
+  ev("state.kcache['sz159608d']._date='2026-08-10';");
+  const r7 = ev("ensureTodayBar('sz159608','d')");
+  const k7 = ev("state.kcache['sz159608d']");
+  const last7 = k7[k7.length-1];
+  const q7 = ev("state.quotes['sz159608']");
+  check('S13 行情“元”单位时不误缩放', r7===true && last7.close===0.55 && q7.price===0.55, 'C='+last7.close+' q.price='+q7.price);
+
+  console.log('\n==== ensureTodayBar 真根因验收（行情合成今日bar + 价格单位自动校准）====');
   log.forEach(l=>console.log(l));
   console.log('\n'+(pass?'🎉 全部通过':'⛔ 存在 FAIL'));
   process.exit(pass?0:1);
