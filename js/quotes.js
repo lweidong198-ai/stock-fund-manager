@@ -267,7 +267,13 @@ function refreshOneKline(code, period, cached){
   if(!cached||!cached.length||cached._demo) return;
   const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
   loadKline(code, period, (tail, isDemo)=>{
-    if(isDemo||!tail||!tail.length) return;          // 限流/无数据→不动缓存，下一轮重试自愈
+    if(isDemo||!tail||!tail.length){
+      // 限流/无数据：3秒后重试一次，提升自愈概率；仍失败则下一轮行情刷新再试
+      if(!refreshOneKline._retry) refreshOneKline._retry={};
+      const rk=code+period;
+      if(!refreshOneKline._retry[rk]){ refreshOneKline._retry[rk]=true; setTimeout(()=>{ refreshOneKline._retry[rk]=false; refreshOneKline(code, period, cached); }, 3000); }
+      return;
+    }
     let updated=false;
     tail.forEach(b=>{
       const idx=cached.findIndex(x=>x.date===b.date);

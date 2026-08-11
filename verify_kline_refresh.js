@@ -68,7 +68,9 @@ function bar(date, close){ return { date, open:close-1, close, high:close+1, low
       'sz000001d': [ bar('2026-08-09',50), bar('2026-08-10',51) ],
       'sh600000w': [ bar('2026-07-31',20), bar('2026-08-07',21) ],
       'sh601318d': [ bar('2026-08-10',200), bar('2026-08-11',202) ],
-      'sz159919d': [ bar('2026-08-10',10) ]
+      'sz159919d': [ bar('2026-08-10',10) ],
+      // 模拟“行业ETF经 loadKlineP 写入 kcache”的缓存（本次修复关键补漏点：518880/515050 此前不进 kcache，跨日不自愈）
+      'sh515050d': [ bar('2026-08-09',100), bar('2026-08-10',101) ]
     }
   };
   ev('state.selected = '+JSON.stringify(seed.selected)+';');
@@ -110,6 +112,11 @@ function bar(date, close){ return { date, open:close-1, close, high:close+1, low
   const staleCodes = ['sh600519d','sz000001d','sh600000w'];
   const allToday = staleCodes.every(c => { const a=k(c); return a && a._date==='2026-08-11' && lastDate(a)==='2026-08-11'; });
   check('E1 所有旧日K线(日/周)均已补刷到 8/11', allToday, 'codes='+staleCodes.join(','));
+
+  // G：行业ETF（518880/515050 同款，经 loadKlineP 进 kcache）跨日补刷——本次修复的核心补漏点
+  const kETF = k('sh515050d');
+  check('G1 行业ETF(sh515050)补刷到 8/11', lastDate(kETF)==='2026-08-11' && kETF._date==='2026-08-11', '末日='+lastDate(kETF)+' _date='+kETF._date);
+  check('G2 行业ETF当日根已并入(长度+1)', kETF.length===3, 'len='+kETF.length);
 
   // F：关键防回归——直接调用的测试只能验证“函数本身对”，验证不了“函数有没有被真实调用链接上”。
   //    本次 bug 正是 refreshKlinesToToday 写对了却没在 onQuotesUpdated 里被调用，直调测试一直绿、线上却没生效。

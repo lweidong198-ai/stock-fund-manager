@@ -71,7 +71,23 @@ function adjustSplits(kl){
   }
   return out;
 }
-function loadKlineP(code, period){ return new Promise(res=>loadKline(code, period, kl=>res(adjustSplits(kl)), {ignoreReqKey:true})); }
+// 行业/机会模块共用入口：拉到K线后写入 state.kcache 并打 _date，
+// 使行业ETF（含518880/515050）纳入 refreshKlinesToToday 的跨日自动刷新网络
+// （否则行业模块只在进视图时拉一次，跨日不自愈，会停在旧交易日）。
+function loadKlineP(code, period){
+  const key = normCode(code)+period;
+  return new Promise(res=>loadKline(code, period, raw=>{
+    const kl = adjustSplits(raw);
+    if(kl && kl.length){
+      const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
+      const existing = state.kcache[key];
+      if(!existing || !existing.length || existing.length < kl.length){  // 不覆盖更完整的缓存（如详情页已补全历史）
+        kl._date=today; kl._loadedAt=Date.now(); state.kcache[key]=kl;
+      } else { existing._date=today; existing._loadedAt=Date.now(); }   // 已有更完整缓存，仅刷新日期标记
+    }
+    res(kl);
+  }, {ignoreReqKey:true}));
+}
 function klinePct(kl, n){ if(!kl||kl.length<n+1) return null; const a=kl[kl.length-n-1].close, b=kl[kl.length-1].close; return (b-a)/a*100; }
 function sectorLight(c){
   if(c.c60==null||c.c20==null) return {cls:'s-unknown', label:'数据不足', dot:'#bbb'};

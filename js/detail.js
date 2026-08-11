@@ -33,7 +33,7 @@ function renderDetail(){
   $('klineMain').style.display='block';
   const key=code+state.period; const kl=state.kcache[key];
   // 立即绘制（不依赖 requestAnimationFrame，避免某些浏览器/环境下回调不触发导致空白）
-  const drawNow=(data)=>{ try{ state.kcache[key]=data; chartStat('图表：K线已加载，绘制中…', null); drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
+  const drawNow=(data)=>{ try{ const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'); data._date=today; data._loadedAt=Date.now(); state.kcache[key]=data; chartStat('图表：K线已加载，绘制中…', null); drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
   if(kl && kl.length){
     if(kl._demo) $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     else $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
@@ -60,6 +60,7 @@ function renderDetail(){
       if(state.selected!==code || !full || !full.length) return;
       const main=$('klineMain'); const oldN = (main&&main._kl)?main._kl.length:0;
       state.kcache[key]=full;
+      { const _d=new Date(); full._date=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'); full._loadedAt=Date.now(); }
       // 视口右端锚定最新K线：新增的历史都在左侧，start 相应右移，用户看到的画面不变
       if(main && main._vp){ const grew = full.length-oldN; if(grew>0) main._vp.start += grew; main._vp.n = full.length; }
       try{ drawAll(full); }catch(e){ console.error('onHistory redraw', e); }
