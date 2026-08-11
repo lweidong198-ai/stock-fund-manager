@@ -221,7 +221,7 @@ function onQuotesUpdated(){ renderWatch();
   // 正在填「止盈/止损价」输入框时，跳过持仓表重渲染，避免清空用户正在输入的内容
   if(document.activeElement && document.activeElement.matches && document.activeElement.matches('input[data-ai]')){}
   else renderHold();
-  if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); refreshSelectedKline();
+  if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); refreshKlinesToToday();
   if(window.DataCalibrator){ DataCalibrator.reportQuotes(DataCalibrator.checkQuotes(state.quotes)); if(!state.demo) DataCalibrator.clearFetch(); }
 }
 
@@ -237,7 +237,7 @@ function isTradingNow(){
 // 分批限流(每批4只、间隔120ms)避免触发腾讯同IP限流；命中限流返回演示数据则不动缓存，下一轮自动重试自愈。
 function refreshKlinesToToday(){
   if(refreshKlinesToToday._busy) return;
-  const now=Date.now(), today=new Date().toISOString().slice(0,10);
+  const now=Date.now(); const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
   const trading=isTradingNow(), sel=state.selected;
   const tasks=[];
   for(const key in state.kcache){
@@ -265,7 +265,7 @@ function refreshKlinesToToday(){
 function refreshOneKline(code, period, cached){
   if(!cached) cached=state.kcache[code+period];
   if(!cached||!cached.length||cached._demo) return;
-  const today=new Date().toISOString().slice(0,10);
+  const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
   loadKline(code, period, (tail, isDemo)=>{
     if(isDemo||!tail||!tail.length) return;          // 限流/无数据→不动缓存，下一轮重试自愈
     let updated=false;

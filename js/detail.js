@@ -39,7 +39,7 @@ function renderDetail(){
     else $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
     drawNow(kl);
     // 缓存停在旧日→后台补刷到今天（不阻塞首屏绘制），用户切到该标的也能立刻看到最新一日
-    if(kl._date !== new Date().toISOString().slice(0,10)) refreshOneKline(code, state.period, kl);
+    if(kl._date !== (()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})()) refreshOneKline(code, state.period, kl);
     return;
   }
   $('dHint').innerHTML='K线加载中… <span style="color:var(--sub)">（腾讯前复权，约1-3秒）</span>';

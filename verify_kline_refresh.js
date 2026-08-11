@@ -111,6 +111,12 @@ function bar(date, close){ return { date, open:close-1, close, high:close+1, low
   const allToday = staleCodes.every(c => { const a=k(c); return a && a._date==='2026-08-11' && lastDate(a)==='2026-08-11'; });
   check('E1 所有旧日K线(日/周)均已补刷到 8/11', allToday, 'codes='+staleCodes.join(','));
 
+  // F：关键防回归——直接调用的测试只能验证“函数本身对”，验证不了“函数有没有被真实调用链接上”。
+  //    本次 bug 正是 refreshKlinesToToday 写对了却没在 onQuotesUpdated 里被调用，直调测试一直绿、线上却没生效。
+  //    故额外断言：onQuotesUpdated 源码里确实调用了 refreshKlinesToToday（接链检查）。
+  const onQ = window.eval('(typeof onQuotesUpdated==="function")?onQuotesUpdated.toString():""');
+  check('F1 刷新函数已接入 onQuotesUpdated 调用链(防“写了没接”)', /refreshKlinesToToday\s*\(/.test(onQ), '源码含 refreshKlinesToToday 调用');
+
   console.log('\n==== K线跨日补刷验收 ====');
   log.forEach(l=>console.log(l));
   console.log('\n'+(pass?'🎉 全部通过':'⛔ 存在 FAIL'));
