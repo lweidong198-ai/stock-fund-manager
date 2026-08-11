@@ -658,6 +658,10 @@
               <p style="margin:8px 0 0;color:var(--flat);">提示：指标只是参考，不能保证涨跌。红涨绿跌为 A 股习惯。</p>
             </details>
             <div class="hint" id="dHint"></div>
+            <div class="hint" id="klineStatus" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+              <span id="klineStatusText">K线状态：加载中…</span>
+              <button id="btnForceRefreshKline" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;">🔄 刷新K线</button>
+            </div>
             <div class="chartstat" id="chartStat">图表：待加载</div>
           </div>
           <div class="card quote-card" id="quoteCard" style="display:none;margin-top:14px;">

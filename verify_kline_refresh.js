@@ -118,7 +118,24 @@ function bar(date, close){ return { date, open:close-1, close, high:close+1, low
   check('G1 行业ETF(sh515050)补刷到 8/11', lastDate(kETF)==='2026-08-11' && kETF._date==='2026-08-11', '末日='+lastDate(kETF)+' _date='+kETF._date);
   check('G2 行业ETF当日根已并入(长度+1)', kETF.length===3, 'len='+kETF.length);
 
-  // F：关键防回归——直接调用的测试只能验证“函数本身对”，验证不了“函数有没有被真实调用链接上”。
+  // H：关键回归——当 tailOnly 没拿到今日 bar 时，_date 必须保持旧日（不能 marking 成今天后永远卡住）
+  //    模拟：今天 8/11，但接口只返回 8/10（盘前/当日未开盘）→ _date 仍为 8/10，下次刷新继续补
+  const staleBars = [ bar('2026-08-08',10), bar('2026-08-10',11) ];
+  ev("state.kcache['sh000001d']="+JSON.stringify(staleBars)+"; state.kcache['sh000001d']._date='2026-08-10';");
+  ev("state.kcache['sh000001d']._loadedAt=Date.now();");
+  // 临时把 mock 切到“只回 8/10”
+  const origLoadKline = window.loadKline;
+  window.loadKline = (code, period, cb, opt)=>{
+    if(opt && opt.tailOnly) cb([ bar('2026-08-10', 11) ], false);
+    else cb([], false);
+  };
+  ev('refreshOneKline("sh000001","d", state.kcache["sh000001d"]);');
+  await new Promise(r=>setTimeout(r, 200));
+  const kStale = k('sh000001d');
+  check('H1 未拿到今日bar时 _date 保持旧日(8/10)', kStale._date==='2026-08-10', '末日='+lastDate(kStale)+' _date='+kStale._date);
+  window.loadKline = origLoadKline;
+
+  // F：关键防回归——直接调用的测试只能验证“函数本身对”，验证不了“函数有没有被真实调用链接上"。
   //    本次 bug 正是 refreshKlinesToToday 写对了却没在 onQuotesUpdated 里被调用，直调测试一直绿、线上却没生效。
   //    故额外断言：onQuotesUpdated 源码里确实调用了 refreshKlinesToToday（接链检查）。
   const onQ = window.eval('(typeof onQuotesUpdated==="function")?onQuotesUpdated.toString():""');

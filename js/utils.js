@@ -69,4 +69,11 @@ function isLikelyFundCode(raw){ const c=String(raw||'').replace(/^(sz|sh|hk|us)/
 function isFundKind(code){ const k=kindOf(code); if(k==='fund') return true; if(k==='stock') return false; return isLikelyFundCode(code); }
 // 收集需要加载基金净值的代码(含 kind=fund 与疑似基金码，统一规整为东方财富裸码)
 function fundCodesToLoad(){ const set=new Set(); [...(state.watch||[]),...(state.hold||[])].forEach(x=>{ if(x&&x.code&&isFundKind(x.code)) set.add(String(x.code).replace(/^(sz|sh|hk|us)/i,'')); }); return [...set]; }
+/* 本地（用户时区）“今天”日期字符串，避免 UTC 偏移导致凌晨/跨时区判断错一天 */
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* K线最新一根 bar 的日期（数组必须已按日期升序） */
+function klineLastDate(kl){ return (kl && kl.length) ? kl[kl.length-1].date : null; }
+/* 标记K线缓存：_date = 最新 bar 日期（而非“今天”），_loadedAt = 当前时间。
+   这样当 tailOnly 没拿到今日 bar 时，_date 仍停留在旧日，下次刷新会继续补刷，避免“假刷新”后永远卡住。 */
+function markKlineDate(kl){ if(kl && kl.length){ kl._date=klineLastDate(kl); kl._loadedAt=Date.now(); } }
 

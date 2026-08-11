@@ -79,11 +79,10 @@ function loadKlineP(code, period){
   return new Promise(res=>loadKline(code, period, raw=>{
     const kl = adjustSplits(raw);
     if(kl && kl.length){
-      const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
       const existing = state.kcache[key];
       if(!existing || !existing.length || existing.length < kl.length){  // 不覆盖更完整的缓存（如详情页已补全历史）
-        kl._date=today; kl._loadedAt=Date.now(); state.kcache[key]=kl;
-      } else { existing._date=today; existing._loadedAt=Date.now(); }   // 已有更完整缓存，仅刷新日期标记
+        markKlineDate(kl); state.kcache[key]=kl;
+      } else { markKlineDate(existing); }   // 已有更完整缓存，仅刷新日期标记
     }
     res(kl);
   }, {ignoreReqKey:true}));

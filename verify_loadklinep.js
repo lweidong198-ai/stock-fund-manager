@@ -33,13 +33,13 @@ ctx.loadKline=(code,period,cb,opt)=>{ if(opt&&opt.tailOnly) cb([sample[2]],false
   await A.loadKlineP('515050','d');
   const kc=A.state.kcache['sh515050d'];
   check('H1 loadKlineP 将行业ETF(无前缀码)写入 kcache', !!kc, 'kcache[sh515050d]='+(kc?'存在':'缺失'));
-  check('H2 写入缓存带 _date=今天(8/11)', kc&&kc._date==='2026-08-11', '_date='+(kc&&kc._date));
+  check('H2 写入缓存带 _date=最新bar日期(8/11)', kc&&kc._date==='2026-08-11', '_date='+(kc&&kc._date));
   check('H3 缓存含完整K线(3根)', kc&&kc.length===3, 'len='+(kc&&kc.length));
 
   // H4：带前缀代码同样处理
   await A.loadKlineP('sh518880','d');
   const kc2=A.state.kcache['sh518880d'];
-  check('H4 带前缀代码(sh518880)同样写入并打 _date', kc2&&kc2._date==='2026-08-11', 'sh518880d='+(kc2&&kc2._date));
+  check('H4 带前缀代码(sh518880)同样写入并打 _date=最新bar日期', kc2&&kc2._date==='2026-08-11', 'sh518880d='+(kc2&&kc2._date));
 
   // H5：已有更完整缓存(更长)时不被覆盖（避免行业模块把详情页已补全历史的K线截短为640根）
   A.state.kcache['sz159915d']=[{date:'2026-01-01',close:1},{date:'2026-08-10',close:2},{date:'2026-08-11',close:3}];

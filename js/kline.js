@@ -40,7 +40,7 @@ function loadKline(code, period, cb, opt){
     const ptype = period==='w'?'week':'day';
     const fQ = period==='w'?'qfqweek':'qfqday';   // 前复权字段
     const fR = period==='w'?'week':'day';         // 原始（未复权）字段
-    const _td=new Date(); const today=_td.getFullYear()+'-'+String(_td.getMonth()+1).padStart(2,'0')+'-'+String(_td.getDate()).padStart(2,'0');
+    const today=todayStr();
     // 腾讯 fqkline 单次最多返回约 640 根；日期区间参数有效，可用「滚动 end 日期」分段向前翻页
     const SEG = 640, MAX_SEG = 5;   // 5 段 ≈ 3200 根（日线约 12~13 年），覆盖绝大多数标的完整历史，不止于首屏 640 根
     const rowsToKl = rows => rows.map(x=>({ date:x[0], open:+x[1], high:+x[3], low:+x[4], close:+x[2], vol:+x[5] }))

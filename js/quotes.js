@@ -181,7 +181,7 @@ function renderHome(){
 
 function refreshQuotes(cb){
   const stockCodes = [...new Set([...state.watch.filter(w=>w.kind==='stock'), ...state.hold.filter(h=>h.kind==='stock')].map(x=>x.code))];
-  let fired=false; const done=()=>{ if(fired)return; fired=true; if(typeof cb==='function') cb(); };
+  let fired=false; const done=()=>{ if(fired)return; fired=true; onQuotesUpdated(); if(typeof cb==='function') cb(); };
   if(stockCodes.length){
     const url='https://qt.gtimg.cn/q='+stockCodes.join(',')+'&_='+Date.now();
     const t=setTimeout(()=>{ useDemoQuotes(stockCodes); done(); }, 8000);
@@ -192,14 +192,14 @@ function refreshQuotes(cb){
       if(Object.keys(d).length===0){ useDemoQuotes(stockCodes); done(); return; }
       Object.assign(state.quotes, d);
       setDemo(false); setDataStatus('ok');
-      onQuotesUpdated();
       done();
     }).catch(err=>{ clearTimeout(t); useDemoQuotes(stockCodes); done(); });
+  } else {
+    done();
   }
   fundCodesToLoad().forEach(c=>{ if(needsFund(c)) loadFund(c); });
   refreshIndices();
   $('updTime').textContent = '更新 '+ts();
-  if(!stockCodes.length) done();
 }
 function ensureStockQuote(code){
   return new Promise(res=>{
@@ -232,12 +232,12 @@ function isTradingNow(){
   const hm=d.getHours()*60+d.getMinutes();
   return (hm>=555 && hm<=690) || (hm>=780 && hm<=900);
 }
-// 跨日/盘中：把「所有已缓存、但停在旧日」的K线补刷到今天（修复“除选中股外其余K线停在上一交易日”）
+// 跨日/盘中：把「所有已缓存、但最新 bar 日期 < 今天」的K线补刷到今天（修复“除选中股外其余K线停在上一交易日”）
 // 旧版仅刷选中股，导致自选/机会列表的K线永远停在批量拉取那一刻；现改为按缓存里每一只标的逐个补刷。
 // 分批限流(每批4只、间隔120ms)避免触发腾讯同IP限流；命中限流返回演示数据则不动缓存，下一轮自动重试自愈。
 function refreshKlinesToToday(){
   if(refreshKlinesToToday._busy) return;
-  const now=Date.now(); const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
+  const now=Date.now(); const today=todayStr();
   const trading=isTradingNow(), sel=state.selected;
   const tasks=[];
   for(const key in state.kcache){
@@ -247,12 +247,14 @@ function refreshKlinesToToday(){
     const code=key.slice(0,-1), period=key.slice(-1);
     const w=(state.watch.find(x=>x.code===code)||state.hold.find(x=>x.code===code));
     if(w&&w.kind==='fund') continue;                 // 基金无K线
-    const needDay = cached._date!==today;
+    const lastBar = klineLastDate(cached);
+    const needDay = !lastBar || lastBar < today;     // 以最新 bar 日期为准，避免“假刷新”后卡住
     const needIntra = code===sel && trading && (!cached._loadedAt || now-cached._loadedAt>120000);
     if(needDay||needIntra) tasks.push({code,period,cached});
   }
   if(!tasks.length) return;
   refreshKlinesToToday._busy=true;
+  console.log('[K线刷新] 启动补刷，标的数=', tasks.length, 'today=', today);
   let i=0; const BATCH=4, GAP=120;
   const step=()=>{
     const slice=tasks.slice(i,i+BATCH); i+=BATCH;
@@ -265,9 +267,11 @@ function refreshKlinesToToday(){
 function refreshOneKline(code, period, cached){
   if(!cached) cached=state.kcache[code+period];
   if(!cached||!cached.length||cached._demo) return;
-  const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
+  const today=todayStr();
+  console.log('[K线刷新] 补刷', code, period, '当前最新=', klineLastDate(cached), '目标>=', today);
   loadKline(code, period, (tail, isDemo)=>{
     if(isDemo||!tail||!tail.length){
+      console.log('[K线刷新] 未拿到数据', code, period, isDemo?'演示':'空', '→3秒后重试');
       // 限流/无数据：3秒后重试一次，提升自愈概率；仍失败则下一轮行情刷新再试
       if(!refreshOneKline._retry) refreshOneKline._retry={};
       const rk=code+period;
@@ -281,7 +285,9 @@ function refreshOneKline(code, period, cached){
       else if(b.date>cached[cached.length-1].date){ cached.push(b); updated=true; }
     });
     if(updated) cached.sort((a,b)=>a.date<b.date?-1:1);
-    cached._date=today; cached._loadedAt=Date.now();  // 标记今日已核对（无论是否出新bar，避免周线/盘前无限重试）
+    markKlineDate(cached);                            // _date = 最新 bar 日期；若今日 bar 仍未出则保持旧日，继续刷新
+    const newLast=klineLastDate(cached);
+    console.log('[K线刷新] 完成', code, period, '合并后最新=', newLast, newLast>=today?'✓':'✗ 仍将继续刷新');
     if(code===state.selected){ if(state.view==='analysis') renderAnalysis(); else if(state.view==='market'||state.view==='detail') renderDetail(); }
     if(window.DataCalibrator) DataCalibrator.reportKline(code, DataCalibrator.checkKline(code, cached));
   }, {tailOnly:true, ignoreReqKey:true});

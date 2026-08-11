@@ -28,18 +28,19 @@ function renderDetail(){
   const w=state.watch.find(x=>x.code===code);
   if(!w || w.kind==='fund'){ $('detailEmpty').style.display='block'; $('detail').style.display='none'; if($('quoteCard')) $('quoteCard').style.display='none'; return; } // 基金由基金工作区处理
   $('detailEmpty').style.display='none'; $('detail').style.display='block'; if($('quoteCard')) $('quoteCard').style.display='block';
+  bindForceRefreshKline();
   renderDetailHead();
   ['wrapMACD','wrapKDJ','wrapRSI'].forEach(id=>$(id).style.display='block');
   $('klineMain').style.display='block';
   const key=code+state.period; const kl=state.kcache[key];
   // 立即绘制（不依赖 requestAnimationFrame，避免某些浏览器/环境下回调不触发导致空白）
-  const drawNow=(data)=>{ try{ const _d=new Date(); const today=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'); data._date=today; data._loadedAt=Date.now(); state.kcache[key]=data; chartStat('图表：K线已加载，绘制中…', null); drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
+  const drawNow=(data)=>{ try{ markKlineDate(data); state.kcache[key]=data; chartStat('图表：K线已加载，绘制中…', null); drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
   if(kl && kl.length){
     if(kl._demo) $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     else $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
     drawNow(kl);
-    // 缓存停在旧日→后台补刷到今天（不阻塞首屏绘制），用户切到该标的也能立刻看到最新一日
-    if(kl._date !== (()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})()) refreshOneKline(code, state.period, kl);
+    // 缓存最新 bar < 今天→后台补刷到今天（不阻塞首屏绘制），用户切到该标的也能立刻看到最新一日
+    if(klineLastDate(kl) < todayStr()) refreshOneKline(code, state.period, kl);
     return;
   }
   $('dHint').innerHTML='K线加载中… <span style="color:var(--sub)">（腾讯前复权，约1-3秒）</span>';
@@ -60,7 +61,7 @@ function renderDetail(){
       if(state.selected!==code || !full || !full.length) return;
       const main=$('klineMain'); const oldN = (main&&main._kl)?main._kl.length:0;
       state.kcache[key]=full;
-      { const _d=new Date(); full._date=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'); full._loadedAt=Date.now(); }
+      markKlineDate(full);
       // 视口右端锚定最新K线：新增的历史都在左侧，start 相应右移，用户看到的画面不变
       if(main && main._vp){ const grew = full.length-oldN; if(grew>0) main._vp.start += grew; main._vp.n = full.length; }
       try{ drawAll(full); }catch(e){ console.error('onHistory redraw', e); }
@@ -91,6 +92,7 @@ function drawAll(kl){
     if(state.ind.rsi) drawLinePane('paneRSI',[{data:r,color:'#d99a00'},{data:r2,color:'#2b7de9'},{data:r3,color:'#d651a8'}],
       {guides:[70,30],crossIdx:_cx,legend:[{label:'RSI6',color:'#d99a00'},{label:'RSI12',color:'#2b7de9'},{label:'RSI24',color:'#d651a8'}]});
     $('dHint').textContent='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
+    updateKlineStatus(state.selected, kl);
     bindKlineInteractions();
     chartStat('图表：已绘制 '+kl.length+' 根K线（版本 '+APP_VER+'）', 'ok');
   }catch(err){
@@ -99,6 +101,22 @@ function drawAll(kl){
     chartStat('图表绘制出错：'+(err&&err.message?err.message:err)+'\n（请截图反馈，版本 '+APP_VER+'）', 'err');
     paintCanvasError('klineMain', err);
   }
+}
+/* K线状态条：让用户直接看到“最新一根是哪一天、是否演示数据、上次刷新时间”，并给强制刷新入口 */
+function updateKlineStatus(code, kl){
+  const el=$('klineStatusText'); if(!el) return;
+  if(!kl || !kl.length){ el.textContent='K线状态：无数据'; return; }
+  const last=klineLastDate(kl), today=todayStr();
+  const demo=kl._demo?'[演示数据] ':'';
+  const stale=!last || last < today;
+  const loaded=kl._loadedAt ? ('更新于 '+new Date(kl._loadedAt).toLocaleTimeString('zh-CN',{hour12:false})) : '';
+  el.textContent=demo+'最新K线：'+last+(stale?' ⚠ 未到今天('+today+')':' ✓')+' '+loaded;
+  el.style.color = stale ? '#d22' : 'var(--sub)';
+}
+function bindForceRefreshKline(){
+  const btn=$('btnForceRefreshKline'); if(!btn || btn._bound) return;
+  btn._bound=true;
+  btn.onclick=()=>{ refreshKline(); };
 }
 /* 由鼠标横坐标反解出K线全局索引（与 drawMain/drawLinePane 的 X() 公式一致，含 padL/padR） */
 function idxFromX(cv, clientX, n){

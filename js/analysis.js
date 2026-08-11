@@ -273,7 +273,7 @@ function renderAnalysis(){
   head.innerHTML='<span class="big">'+nameOf(code)+'</span><span class="meta">'+code+(w&&w.kind==='fund'?' · 基金':' · 股票/ETF')+'</span><span id="anPrice" style="margin-left:auto;"></span>';
   if(w&&w.kind==='fund' && !state.fundData[code]){ loadFund(code); verdictEl.innerHTML='<div class="empty">基金数据加载中…</div>'; return; }
   if(w&&w.kind!=='fund' && !state.kcache[code+'d']){
-    if(!renderAnalysis._pending){ renderAnalysis._pending=true; loadKline(code,'d',(kl)=>{ renderAnalysis._pending=false; if(kl&&kl.length){ const k=kl; const d=new Date(); k._date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); k._loadedAt=Date.now(); state.kcache[code+'d']=k; } renderAnalysis(); }); }
+    if(!renderAnalysis._pending){ renderAnalysis._pending=true; loadKline(code,'d',(kl)=>{ renderAnalysis._pending=false; if(kl&&kl.length){ markKlineDate(kl); state.kcache[code+'d']=kl; } renderAnalysis(); }); }
     verdictEl.innerHTML='<div class="empty">K线加载中…</div>'; return;
   }
   const a=analyze(code);
