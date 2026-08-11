@@ -37,7 +37,10 @@ function renderDetail(){
   if(kl && kl.length){
     if(kl._demo) $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     else $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
-    drawNow(kl); return;
+    drawNow(kl);
+    // 缓存停在旧日→后台补刷到今天（不阻塞首屏绘制），用户切到该标的也能立刻看到最新一日
+    if(kl._date !== new Date().toISOString().slice(0,10)) refreshOneKline(code, state.period, kl);
+    return;
   }
   $('dHint').innerHTML='K线加载中… <span style="color:var(--sub)">（腾讯前复权，约1-3秒）</span>';
   chartStat('图表：正在拉取K线数据（'+APP_VER+'）', null);

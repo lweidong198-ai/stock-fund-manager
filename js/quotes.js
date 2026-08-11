@@ -232,28 +232,52 @@ function isTradingNow(){
   const hm=d.getHours()*60+d.getMinutes();
   return (hm>=555 && hm<=690) || (hm>=780 && hm<=900);
 }
-// 盘中定时轻量刷新当前选中标的的当日K线（解决“K线停更在上一交易日”问题）
-function refreshSelectedKline(){
-  const code=state.selected; if(!code) return;
-  const w=state.watch.find(x=>x.code===code); if(!w||w.kind==='fund') return;
-  const key=code+'d', cached=state.kcache[key];
-  // ★ 首次无缓存时不能走 tailOnly：只拉8根会压扁首屏K线。让完整 loadKline 负责首次填充。
-  if(!cached || !cached.length) return;
+// 跨日/盘中：把「所有已缓存、但停在旧日」的K线补刷到今天（修复“除选中股外其余K线停在上一交易日”）
+// 旧版仅刷选中股，导致自选/机会列表的K线永远停在批量拉取那一刻；现改为按缓存里每一只标的逐个补刷。
+// 分批限流(每批4只、间隔120ms)避免触发腾讯同IP限流；命中限流返回演示数据则不动缓存，下一轮自动重试自愈。
+function refreshKlinesToToday(){
+  if(refreshKlinesToToday._busy) return;
   const now=Date.now(), today=new Date().toISOString().slice(0,10);
-  const need = cached._date!==today || (isTradingNow() && (!cached._loadedAt || now-cached._loadedAt>120000));
-  if(!need || refreshSelectedKline._busy) return;
-  refreshSelectedKline._busy=true;
-  loadKline(code,'d',(tail)=>{
-    refreshSelectedKline._busy=false;
-    if(!tail||!tail.length) return;
-    const tbar=tail[tail.length-1];
-    if(tbar.date===today){
-      if(!cached){ state.kcache[key]=tail; }
-      else { const i=cached.findIndex(x=>x.date===today); if(i>=0) cached[i]=tbar; else { cached.push(tbar); cached.sort((a,b)=>a.date<b.date?-1:1); } }
-      if(cached){ cached._date=today; cached._loadedAt=Date.now(); }
-      if(cached && window.DataCalibrator) DataCalibrator.reportKline(code, DataCalibrator.checkKline(code, cached));
-      if(state.view==='analysis') renderAnalysis(); else if(state.view==='market') renderDetail();
-    }
-  },{tailOnly:true, ignoreReqKey:true});
+  const trading=isTradingNow(), sel=state.selected;
+  const tasks=[];
+  for(const key in state.kcache){
+    if(!/[dw]$/.test(key)) continue;                 // 仅处理日/周K
+    const cached=state.kcache[key];
+    if(!cached||!cached.length||cached._demo) continue;
+    const code=key.slice(0,-1), period=key.slice(-1);
+    const w=(state.watch.find(x=>x.code===code)||state.hold.find(x=>x.code===code));
+    if(w&&w.kind==='fund') continue;                 // 基金无K线
+    const needDay = cached._date!==today;
+    const needIntra = code===sel && trading && (!cached._loadedAt || now-cached._loadedAt>120000);
+    if(needDay||needIntra) tasks.push({code,period,cached});
+  }
+  if(!tasks.length) return;
+  refreshKlinesToToday._busy=true;
+  let i=0; const BATCH=4, GAP=120;
+  const step=()=>{
+    const slice=tasks.slice(i,i+BATCH); i+=BATCH;
+    slice.forEach(({code,period,cached})=> refreshOneKline(code,period,cached));
+    if(i<tasks.length) setTimeout(step, GAP); else refreshKlinesToToday._busy=false;
+  };
+  step();
+}
+// 单只K线补刷：tailOnly 只拉当日根，合并进缓存并视情况重绘（详情/分析视图）
+function refreshOneKline(code, period, cached){
+  if(!cached) cached=state.kcache[code+period];
+  if(!cached||!cached.length||cached._demo) return;
+  const today=new Date().toISOString().slice(0,10);
+  loadKline(code, period, (tail, isDemo)=>{
+    if(isDemo||!tail||!tail.length) return;          // 限流/无数据→不动缓存，下一轮重试自愈
+    let updated=false;
+    tail.forEach(b=>{
+      const idx=cached.findIndex(x=>x.date===b.date);
+      if(idx>=0){ cached[idx]=b; updated=true; }
+      else if(b.date>cached[cached.length-1].date){ cached.push(b); updated=true; }
+    });
+    if(updated) cached.sort((a,b)=>a.date<b.date?-1:1);
+    cached._date=today; cached._loadedAt=Date.now();  // 标记今日已核对（无论是否出新bar，避免周线/盘前无限重试）
+    if(code===state.selected){ if(state.view==='analysis') renderAnalysis(); else if(state.view==='market'||state.view==='detail') renderDetail(); }
+    if(window.DataCalibrator) DataCalibrator.reportKline(code, DataCalibrator.checkKline(code, cached));
+  }, {tailOnly:true, ignoreReqKey:true});
 }
 

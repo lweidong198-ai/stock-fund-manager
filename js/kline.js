@@ -62,7 +62,7 @@ function loadKline(code, period, cb, opt){
       if((!seg || !seg.length) && attempt<2) return new Promise(r=>setTimeout(()=>r(fetchSegR(endDate, attempt+1)), 300*(attempt+1)));
       return seg || [];
     }).catch(()=> attempt<2 ? new Promise(r=>setTimeout(()=>r(fetchSegR(endDate, attempt+1)), 300*(attempt+1))) : []);
-    const prevDay = ds => { const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()-1); return t.toISOString().slice(0,10); };
+    const prevDay = ds => { const y=+ds.slice(0,4), m=+ds.slice(5,7)-1, d=+ds.slice(8,10); const t=new Date(Date.UTC(y,m,d)); t.setUTCDate(t.getUTCDate()-1); return t.toISOString().slice(0,10); };
     // 轻量刷新模式：只拉最近若干根（含当日），用于盘中定时更新当日K线，避免每次重拉全部历史
     if(opt.tailOnly){
       const turl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+code+','+ptype+','+prevDay(today)+','+today+',8,qfq&_='+Date.now()+Math.random();
