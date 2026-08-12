@@ -568,6 +568,7 @@
     <div class="navitem nav-decision" data-view="timing">🧠 择时建仓</div>
     <div class="navgroup ng-tool"><span class="ng-bar"></span>数据工具</div>
     <div class="navitem nav-tool" data-view="datacenter">🧮 可靠数据中心</div>
+    <div class="navitem nav-tool" data-view="rebalance">📐 调仓频率实验室</div>
     <div class="navfoot">点自选行→行情页看K线/净值；想看「大师怎么看这只」在「择时建仓」里点「建仓打分」；给基金做体检在「机会发现」里点「基金体检」。<br><a href="javascript:void(0)" onclick="showView('datacenter')">🧮 可靠数据中心（数据来源说明）</a></div>
   </nav>
 
@@ -985,6 +986,12 @@
       <div class="dc-note">⚠ 全部指标均为<b>历史统计事实</b>，不构成任何买卖建议。分散度 / 回撤 / 分位帮你「看清楚现状」，但过去规律不保证未来。</div>
     </div>
   </div>
+  <div id="viewRebalance" class="view" style="display:none">
+    <div class="card">
+      <h2>📐 调仓频率实验室 <span class="tag">月频 vs 日频 vs 日频短动量 · 真实回测</span></h2>
+      <div id="rebalBody"></div>
+    </div>
+  </div>
 </div>
 
   <script src="js/config.js"></script>
@@ -1004,6 +1011,7 @@
   <script src="js/opportunity.js"></script>
   <script src="js/detail.js"></script>
   <script src="js/datacenter.js"></script>
+  <script src="js/rebalance.js"></script>
   <script src="js/fundanalysis.js"></script>
   <script src="js/app.js"></script>
 <div id="storageWarn">⚠️ 当前浏览器禁用了本地存储（可能是无痕/隐私模式或设置关闭），<b>数据无法自动保存</b>。请改用 Chrome/Edge 正常模式打开，或点「导出备份」手动留存。</div>

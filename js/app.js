@@ -25,7 +25,7 @@ function setNavOn(v){
   document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('on', n.dataset.view===v));
 }
 function showView(v, keepNav){
-  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter'].forEach(x=>{
+  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance'].forEach(x=>{
     const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1));
     if(el) el.style.display=(x===v)?((x==='market'||x==='fund'||x==='fundAnalysis')?'grid':'block'):'none';
   });
@@ -60,7 +60,7 @@ function showSub(g, sub){
   }
 }
 function enterGroup(g){
-  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter'].forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display='none'; });
+  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance'].forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display='none'; });
   const sub=(state.subView&&state.subView[g])||VIEW_GROUPS[g].def;
   showSub(g, sub);
 }
@@ -94,6 +94,7 @@ function goView(v){
   if(v==='rotation'){ showView('rotation'); renderRotation(); return; }
   if(v==='flow'){ showView('flow'); renderFlow(); return; }
   if(v==='datacenter'){ showView('datacenter'); renderDataCenter(); return; }
+  if(v==='rebalance'){ showView('rebalance'); renderRebalance(); return; }
   showView(v); // home / hold
 }
 
