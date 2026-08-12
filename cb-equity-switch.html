@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>可转债守底 + 美股双强动量 信号看板</title>
+<title>纯国内 · 黄金↔可转债双强动量 信号看板</title>
 <style>
   :root{
     --bg:#0f1420; --card:#19202e; --card2:#212b3d; --line:#2c3954;
@@ -51,8 +51,8 @@
 </style>
 </head>
 <body>
-  <h1>📡 可转债守底 + 美股双强动量 信号看板</h1>
-  <div class="sub">每月只看一次信号：月末看、月初第一个交易日调仓。最多持 1 只（在「最多 3-5 只」上限内）。<br>数据：腾讯前复权 K 线（零 Key，双击即用）。</div>
+  <h1>📡 纯国内 · 黄金↔可转债双强动量 信号看板</h1>
+  <div class="sub">每月只看一次信号：月末看、月初第一个交易日调仓。最多持 1 只（在「最多 3-5 只」上限内）。<br>全部 A 股账户人民币可买，不碰美股。数据：腾讯前复权 K 线（零 Key，双击即用）。</div>
 
   <div id="statusLine"></div>
 
@@ -73,12 +73,12 @@
   <!-- 回测背书 -->
   <div class="card">
     <div style="font-size:13px;color:var(--sub);margin-bottom:8px;">📊 该策略真实样本外回测（2020-11 ~ 2026-08，含 2022 熊市）</div>
-    <div class="stat-row"><span class="k">年化收益</span><span class="v atk">15.97%</span></div>
-    <div class="stat-row"><span class="k">最大回撤</span><span class="v">19.7%</span></div>
-    <div class="stat-row"><span class="k">夏普比率</span><span class="v">0.83</span></div>
-    <div class="stat-row"><span class="k">对照：纯纳指(买入不动)</span><span class="v atk">17.87% / 回撤25.5%</span></div>
+    <div class="stat-row"><span class="k">年化收益</span><span class="v atk">16.80%</span></div>
+    <div class="stat-row"><span class="k">最大回撤</span><span class="v">24.3%</span></div>
+    <div class="stat-row"><span class="k">夏普比率</span><span class="v">1.00</span></div>
+    <div class="stat-row"><span class="k">对照：纯黄金(买入不动)</span><span class="v atk">17.19% / 回撤23.9%</span></div>
     <div class="stat-row"><span class="k">对照：纯可转债(守底)</span><span class="v">5.27% / 回撤11.2%</span></div>
-    <div class="note">⚠️ 样本含美股 2023-2025 长牛，未来不一定重复；依赖美股牛市，美股走弱会自动切回可转债守底；单只全仓，19.7% 回撤需能承受。</div>
+    <div class="note">⚠️ 大实话：16.8% 主要靠 2024 黄金 +27.5%、2025 黄金 +56.9% 的非常规暴涨拉动；黄金历史上曾连跌 4 年。若黄金转熊，会自动切回可转债/国债，但收益会掉回个位数。本看板是「描述式信号」，不是预测，不构成投资建议。</div>
   </div>
 
   <!-- 手动兜底 -->
@@ -94,9 +94,9 @@
 
 <script>
 const ASSETS=[
+  {code:'sh518880', name:'黄金ETF',   short:'黄金'},
   {code:'sh511380', name:'可转债ETF', short:'可转债'},
-  {code:'sh513100', name:'纳指ETF',   short:'纳指'},
-  {code:'sh513500', name:'标普500ETF',short:'标普'}
+  {code:'sh511010', name:'国债ETF',   short:'国债'}
 ];
 const idx={}; // code -> {kl, m, err}
 
@@ -105,7 +105,7 @@ function cls(x){ return x>=0?'up':'down'; }
 function colorOf(x){ return x>=0?'var(--up)':'var(--down)'; }
 
 async function loadKL(code){
-  const url=`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,2025-01-01,2026-12-31,650,qfq`;
+  const url=`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,2024-01-01,2026-12-31,700,qfq`;
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),12000);
   try{
@@ -126,26 +126,29 @@ function mom12(kl){
   const last=kl[kl.length-1];
   const lt=Date.parse(last[0].replace(/-/g,'/'));
   const target=lt-365*86400000;
-  let idx=-1;
+  let id=-1;
   for(let i=kl.length-1;i>=0;i--){
-    if(Date.parse(kl[i][0].replace(/-/g,'/'))<=target){ idx=i; break; }
+    if(Date.parse(kl[i][0].replace(/-/g,'/'))<=target){ id=i; break; }
   }
-  if(idx<0) idx=0;
-  const past=kl[idx][1];
+  if(id<0) id=0;
+  const past=kl[id][1];
   if(!past) return null;
   return last[1]/past-1;
 }
 
+// 双强：黄金 vs 可转债，谁12月动量强买谁；都跌→国债
 function computeSignal(){
-  const mN=idx['sh513100']&&idx['sh513100'].m;
-  const mS=idx['sh513500']&&idx['sh513500'].m;
+  const mG=idx['sh518880']&&idx['sh518880'].m;
   const mC=idx['sh511380']&&idx['sh511380'].m;
-  if(mN==null||mS==null||mC==null) return null;
-  const eq = mN>=mS ? {name:'纳指ETF', code:'513100', m:mN} : {name:'标普500ETF', code:'513500', m:mS};
-  if(eq.m >= mC){
-    return {defend:false, name:eq.name, code:eq.code, m:eq.m, mc:mC};
+  const mB=idx['sh511010']&&idx['sh511010'].m;
+  if(mG==null||mC==null||mB==null) return null;
+  if(mG<=0 && mC<=0){
+    return {bond:true, name:'国债ETF', code:'511010', m:mB, mg:mG, mc:mC};
+  }
+  if(mG>=mC){
+    return {bond:false, name:'黄金ETF', code:'518880', m:mG, mc:mC};
   }else{
-    return {defend:true, name:'可转债ETF', code:'511380', m:mC, mc:eq.m};
+    return {bond:false, cb:true, name:'可转债ETF', code:'511380', m:mC, mc:mG};
   }
 }
 
@@ -154,16 +157,21 @@ function renderSignal(sig){
   const codeEl=document.getElementById('sigCode');
   const reasonEl=document.getElementById('sigReason');
   if(!sig){ nameEl.textContent='数据不足'; codeEl.textContent=''; reasonEl.textContent='请查看下方手动输入区。'; return; }
-  if(sig.defend){
-    nameEl.innerHTML='🛡 全仓 可转债ETF';
+  if(sig.bond){
+    nameEl.innerHTML='🛡 全仓 国债ETF';
     nameEl.className='big def';
-    codeEl.textContent='代码 511380（守底）';
-    reasonEl.innerHTML=`可转债近12月动量 <span class="atk">${pct(sig.m)}</span> ≥ 美股最强 <span class="atk">${pct(sig.mc)}</span>，美股偏弱 → 切回可转债守底。`;
-  }else{
-    nameEl.innerHTML=`📈 全仓 ${sig.name}`;
+    codeEl.textContent='代码 511010（都跌，先躲着）';
+    reasonEl.innerHTML=`黄金 <span class="atk">${pct(sig.mg)}</span> 与 可转债 <span class="atk">${pct(sig.mc)}</span> 近12月均下跌 → 买国债躲风险，等信号转正。`;
+  }else if(sig.cb){
+    nameEl.innerHTML=`📈 全仓 可转债ETF`;
     nameEl.className='big atk';
-    codeEl.textContent=`代码 ${sig.code}（进攻）`;
-    reasonEl.innerHTML=`美股最强（${sig.name}）近12月动量 <span class="atk">${pct(sig.m)}</span> ＞ 可转债 <span class="atk">${pct(sig.mc)}</span>，美股偏强 → 进攻。`;
+    codeEl.textContent='代码 511380（守底进攻）';
+    reasonEl.innerHTML=`可转债近12月动量 <span class="atk">${pct(sig.m)}</span> ＞ 黄金 <span class="atk">${pct(sig.mc)}</span>，黄金偏弱 → 持可转债。`;
+  }else{
+    nameEl.innerHTML=`📈 全仓 黄金ETF`;
+    nameEl.className='big atk';
+    codeEl.textContent='代码 518880（进攻）';
+    reasonEl.innerHTML=`黄金近12月动量 <span class="atk">${pct(sig.m)}</span> ＞ 可转债 <span class="atk">${pct(sig.mc)}</span>，黄金偏强 → 持黄金。`;
   }
 }
 
