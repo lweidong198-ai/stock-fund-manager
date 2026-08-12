@@ -1,43 +1,46 @@
-// 验证两个国内版单文件HTML：jsdom实跑 + mock腾讯K线，确认信号能渲染
+// 验证两个国内场外基金版单文件HTML：jsdom实跑 + mock东财净值(script注入)，确认信号能渲染
 const fs=require('fs');
 const { JSDOM } = require('jsdom');
 
-// 生成伪K线：start->end 线性，700根，date递增
-function genKL(code, start, end){
-  const n=700; const arr=[]; const base=Date.parse('2024-01-01');
-  for(let i=0;i<n;i++){
-    const t=base+i*864e5; const d=new Date(t).toISOString().slice(0,10);
-    const c=start+(end-start)*i/(n-1);
-    arr.push([d, c.toFixed(4), c.toFixed(4), c.toFixed(4), c.toFixed(4), '100']);
-  }
+// 生成伪净值：[ [timestampMs, nav], ... ]，n根日频，start->end 线性
+function genNav(start,end,n){
+  const arr=[]; const base=Date.parse('2025-07-01');
+  for(let i=0;i<n;i++){ const t=base+i*864e5; arr.push([t, +(start+(end-start)*i/(n-1)).toFixed(4)]); }
   return arr;
 }
-// 场景：黄金强(涨30%) > 可转债(涨6%) > 国债(涨3%)
-const KDATA={
-  sh518880:genKL('sh518880',1.0,1.30),
-  sh511380:genKL('sh511380',1.0,1.06),
-  sh511010:genKL('sh511010',1.0,1.03),
+// 场景：黄金强(涨50%) > 可转债(涨4%) > 纯债(涨2%)
+const NDATA={
+  '000216':genNav(1.0,1.50,400),
+  '340001':genNav(1.0,1.04,400),
+  '050027':genNav(1.0,1.02,400),
 };
 
-function makeFetch(){
-  return async (url)=>{
-    const m=url.match(/param=(sh\d+|sz\d+)/);
-    const code=m?m[1]:null;
-    const arr=KDATA[code];
-    if(!arr) return {ok:false,json:async()=>({})};
-    return {ok:true, json:async()=>({data:{[code]:{qfqday:arr}}})};
-  };
+function makeDom(path){
+  const html=fs.readFileSync(path,'utf8');
+  return new JSDOM(html,{
+    runScripts:'dangerously',
+    beforeParse(window){
+      window.AbortController=global.AbortController;
+      const proto=window.Element.prototype;
+      const origAppend=proto.appendChild;
+      proto.appendChild=function(node){
+        if(node && node.tagName==='SCRIPT' && node.src && node.src.indexOf('pingzhongdata')>=0){
+          const m=node.src.match(/pingzhongdata\/(.+?)\.js/);
+          const code=m?m[1]:null;
+          window.Data_ACWorthTrend=(NDATA[code]||[]).map(x=>[x[0],x[1]]);
+          if(node.onload) setTimeout(()=>node.onload(),0);
+          return node;
+        }
+        return origAppend.call(this,node);
+      };
+    }
+  });
 }
 
 async function testFile(path, label){
-  const html=fs.readFileSync(path,'utf8');
-  const dom=new JSDOM(html,{
-    runScripts:'dangerously',
-    beforeParse(window){ window.fetch=makeFetch(); window.AbortController=global.AbortController; }
-  });
+  const dom=makeDom(path);
   const w=dom.window, doc=w.document;
-  // 等异步loadAll完成
-  for(let i=0;i<50;i++){
+  for(let i=0;i<60;i++){
     const t=doc.getElementById('sigName');
     if(t && t.textContent!=='计算中…' && t.textContent!=='数据不足') break;
     await new Promise(r=>setTimeout(r,40));
@@ -47,8 +50,7 @@ async function testFile(path, label){
   const reason=doc.getElementById('sigReason').textContent;
   const grid=doc.getElementById('mGrid');
   const cards=grid?grid.querySelectorAll('.mcard').length:0;
-  // 看板有动量小卡片(mGrid)需3张；清单版无mGrid，只验证信号渲染即可
-  const pass = /黄金ETF/.test(name) && (grid? cards===3 : true);
+  const pass = /黄金/.test(name) && (grid? cards===3 : true);
   console.log(`\n[${label}] ${pass?'PASS':'FAIL'}`);
   console.log('  信号:', name, '|', code);
   console.log('  理由:', reason.slice(0,80));
@@ -58,8 +60,8 @@ async function testFile(path, label){
 }
 
 (async()=>{
-  console.log('jsdom 实跑验证：国内版单文件HTML');
-  await testFile('cb-equity-switch.html','独立看板(国内版)');
-  await testFile('国内轮动实操清单.html','大白话实操清单');
+  console.log('jsdom 实跑验证：国内场外基金版单文件HTML（mock东财净值）');
+  await testFile('cb-equity-switch.html','独立看板(场外版)');
+  await testFile('国内轮动实操清单.html','大白话实操清单(场外版)');
   console.log('\n全部完成。');
 })();

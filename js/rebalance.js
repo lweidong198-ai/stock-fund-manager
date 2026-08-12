@@ -132,6 +132,13 @@
       +'<button id="btnRebalVerify" class="primary">📡 用真实行情重新验证（拉可转债/纳指/标普ETF）</button>'
       +'<span id="rebalVerifyMsg" style="font-size:12px;color:var(--sub);"></span></div>';
     h+='<div id="rebalLive" style="margin-top:10px;"></div>';
+    h+='<div class="card" style="margin-top:16px;border-left:3px solid var(--accent);">'
+      +'<div style="font-weight:700;font-size:13px;margin-bottom:4px;">🇨🇳 纯国内实战版（不碰美股，全部 A 股账户人民币可买）</div>'
+      +'<div class="explain" style="margin:0 0 8px;">上面的频率实验是「含美股 ETF」版本。若你只做国内、且没股票账户，点下面看<b>买哪 3 只场外基金 + 每月几号调仓</b>的大白话清单与实时信号（支付宝/天天基金直接买，无需股票账户）：</div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+      +'<a class="primary" style="text-decoration:none;" href="国内轮动实操清单.html" target="_blank">📋 国内轮动实操清单（买哪只+每月怎么做）</a>'
+      +'<a class="primary" style="text-decoration:none;background:var(--panel2);color:var(--accent);" href="cb-equity-switch.html" target="_blank">📡 国内轮动信号看板（实时该买哪只）</a>'
+      +'</div></div>';
     body.innerHTML=h;
     const btn=document.getElementById('btnRebalVerify');
     if(btn) btn.onclick=verifyLive;

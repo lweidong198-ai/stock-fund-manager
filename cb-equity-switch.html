@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>纯国内 · 黄金↔可转债双强动量 信号看板</title>
+<title>纯国内 · 场外基金 黄金↔可转债 双强动量 信号看板</title>
 <style>
   :root{
     --bg:#0f1420; --card:#19202e; --card2:#212b3d; --line:#2c3954;
@@ -51,8 +51,8 @@
 </style>
 </head>
 <body>
-  <h1>📡 纯国内 · 黄金↔可转债双强动量 信号看板</h1>
-  <div class="sub">每月只看一次信号：月末看、月初第一个交易日调仓，每次只全仓持 1 只。<br>全部 A 股账户人民币可买，不碰美股。数据：腾讯前复权 K 线（零 Key，双击即用）。</div>
+  <h1>📡 纯国内 · 场外基金 黄金↔可转债 双强动量 信号看板</h1>
+  <div class="sub">每月只看一次信号：月末看、下月初第一个交易日调仓，每次只全仓持 1 只。<br><b>全是场外基金，支付宝 / 天天基金 / 银行 APP 直接买，无需股票账户</b>。数据：天天基金(东财)真实净值（零 Key，双击即用）。</div>
 
   <div id="statusLine"></div>
 
@@ -72,19 +72,20 @@
 
   <!-- 回测背书 -->
   <div class="card">
-    <div style="font-size:13px;color:var(--sub);margin-bottom:8px;">📊 该策略真实样本外回测（12 年数据 2014~2026，含多轮牛熊；此前 2020 起短区间曾达 16.8% 属黄金暴涨虚高）</div>
-    <div class="stat-row"><span class="k">年化收益（12 年真实）</span><span class="v atk">10.51%</span></div>
-    <div class="stat-row"><span class="k">最大回撤</span><span class="v">24.3%</span></div>
-    <div class="stat-row"><span class="k">夏普比率</span><span class="v">0.71</span></div>
-    <div class="stat-row"><span class="k">对照：纯黄金 12 年(买入不动)</span><span class="v atk">11.96% / 回撤23.9%</span></div>
-    <div class="stat-row"><span class="k">对照：纯可转债 12 年(守底)</span><span class="v">2.79% / 回撤11.2%</span></div>
-    <div class="note">⚠️ 大实话：上面 10.5% 是拉长到 12 年（2014~2026）的真实数据。此前给你看的 16.8% 是只取 2020-11 起短区间、恰好撞上黄金 2024(+27%)、2025(+57%) 暴涨的「幸存者偏差」，不能当常态。黄金历史上曾连跌 4 年；若黄金转熊会自动切回可转债/国债，收益会掉回个位数。纯国内轮动长期天花板就 10~14%，18% 够不到。本看板是「描述式信号」，不是预测，不构成投资建议。</div>
+    <div style="font-size:13px;color:var(--sub);margin-bottom:8px;">📊 该策略真实回测（场外基金净值 2013-08~2026-08，约 13 年，含多轮牛熊；此前 2020 起短区间曾达 16.8% 属黄金暴涨虚高）</div>
+    <div class="stat-row"><span class="k">年化收益（13 年真实净值）</span><span class="v atk">10.79%</span></div>
+    <div class="stat-row"><span class="k">最大回撤</span><span class="v">25.5%</span></div>
+    <div class="stat-row"><span class="k">夏普比率</span><span class="v">0.72</span></div>
+    <div class="stat-row"><span class="k">对照：纯黄金联接 买入不动</span><span class="v atk">9.59% / 回撤30.0%</span></div>
+    <div class="stat-row"><span class="k">对照：纯可转债基金 守底</span><span class="v">6.80% / 回撤15.0%</span></div>
+    <div class="stat-row"><span class="k">对照：纯债基金 躲风港</span><span class="v">3.98% / 回撤5.0%</span></div>
+    <div class="note">⚠️ 大实话：上面 10.8% 是拉长到 13 年（2013~2026）的真实净值数据。此前给你看的 16.8% 是只取 2020-11 起短区间、恰好撞上黄金 2024(+27%)、2025(+57%) 暴涨的「幸存者偏差」，不能当常态。黄金历史上曾连跌 4 年；若黄金转熊会自动切回可转债/纯债，收益会掉回个位数。<b>纯国内轮动长期天花板就 10~14%，18% 够不到。</b>本月频双强(10.8%/25.5%) 比 单持黄金(9.59%/30%) 回撤更小还略多赚，轮动有用。本看板是「描述式信号」，不是预测，不构成投资建议。</div>
   </div>
 
   <!-- 手动兜底 -->
   <div class="card manual" id="manualCard">
     <div style="font-size:14px;font-weight:700;margin-bottom:4px;">✍️ 自动获取失败？手动填也能算</div>
-    <div class="note" style="margin-bottom:8px;">填「当前价」和「约 12 个月前的价」，点计算即可得出信号。数据可从任意行情软件复制。</div>
+    <div class="note" style="margin-bottom:8px;">填「当前净值」和「约 12 个月前的净值」，点计算即可得出信号。数据可从支付宝/天天基金复制（单位净值或累计净值都行，两组用同一种）。</div>
     <div id="manualInputs"></div>
     <button onclick="calcManual()">计算信号</button>
     <button class="ghost" onclick="retryAuto()" style="margin-top:8px;">重试自动获取</button>
@@ -94,61 +95,62 @@
 
 <script>
 const ASSETS=[
-  {code:'sh518880', name:'黄金ETF',   short:'黄金'},
-  {code:'sh511380', name:'可转债ETF', short:'可转债'},
-  {code:'sh511010', name:'国债ETF',   short:'国债'}
+  {code:'000216', name:'黄金ETF联接A', short:'黄金'},
+  {code:'340001', name:'兴全可转债',   short:'可转债'},
+  {code:'050027', name:'博时信用债纯债A', short:'纯债'}
 ];
-const idx={}; // code -> {kl, m, err}
+const idx={}; // code -> {nav, m, err}
 
 function pct(x){ if(x==null||isNaN(x)) return '--'; return (x>=0?'+':'')+(x*100).toFixed(2)+'%'; }
 function cls(x){ return x>=0?'up':'down'; }
 function colorOf(x){ return x>=0?'var(--up)':'var(--down)'; }
 
-async function loadKL(code){
-  const url=`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,2024-01-01,2026-12-31,700,qfq`;
-  const ctrl=new AbortController();
-  const t=setTimeout(()=>ctrl.abort(),12000);
-  try{
-    const r=await fetch(url,{signal:ctrl.signal,headers:{'User-Agent':'Mozilla/5.0'}});
-    clearTimeout(t);
-    if(!r.ok) throw new Error('http '+r.status);
-    const j=await r.json();
-    const node=j.data&&j.data[code];
-    const arr=node&&(node.qfqday||node.day);
-    if(!arr||!arr.length) throw new Error('empty');
-    return arr.map(r=>[r[0], parseFloat(r[2])]); // [date, close]
-  }catch(e){ clearTimeout(t); throw e; }
+// 东财基金净值（累计净值 Data_ACWorthTrend），用 script 注入读取，避开 CORS，file:// 双击可用
+function loadNAV(code){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://fund.eastmoney.com/pingzhongdata/'+code+'.js';
+    s.onload=()=>{
+      try{
+        const raw=window.Data_ACWorthTrend;
+        if(!raw||!raw.length) return reject(new Error('empty'));
+        const series=raw.map(x=>[new Date(x[0]).toISOString().slice(0,10), x[1]]).filter(x=>x[1]>0);
+        resolve(series);
+      }catch(e){ reject(e); }
+      finally{ try{delete window.Data_ACWorthTrend;}catch(_){} s.remove(); }
+    };
+    s.onerror=()=>reject(new Error('script error'));
+    document.head.appendChild(s);
+  });
 }
 
-// 近12个月动量：最后一根收盘价 / 约365天前那根收盘价 - 1
-function mom12(kl){
-  if(!kl||kl.length<60) return null;
-  const last=kl[kl.length-1];
-  const lt=Date.parse(last[0].replace(/-/g,'/'));
+// 近12个月动量：最后净值 / 约365天前净值 - 1
+function mom12(nav){
+  if(!nav||nav.length<60) return null;
+  const last=nav[nav.length-1];
+  const lt=Date.parse(last[0]);
   const target=lt-365*86400000;
   let id=-1;
-  for(let i=kl.length-1;i>=0;i--){
-    if(Date.parse(kl[i][0].replace(/-/g,'/'))<=target){ id=i; break; }
-  }
+  for(let i=nav.length-1;i>=0;i--){ if(Date.parse(nav[i][0])<=target){ id=i; break; } }
   if(id<0) id=0;
-  const past=kl[id][1];
+  const past=nav[id][1];
   if(!past) return null;
   return last[1]/past-1;
 }
 
-// 双强：黄金 vs 可转债，谁12月动量强买谁；都跌→国债
+// 双强：黄金 vs 可转债，谁12月动量强买谁；都跌→纯债
 function computeSignal(){
-  const mG=idx['sh518880']&&idx['sh518880'].m;
-  const mC=idx['sh511380']&&idx['sh511380'].m;
-  const mB=idx['sh511010']&&idx['sh511010'].m;
+  const mG=idx['000216']&&idx['000216'].m;
+  const mC=idx['340001']&&idx['340001'].m;
+  const mB=idx['050027']&&idx['050027'].m;
   if(mG==null||mC==null||mB==null) return null;
   if(mG<=0 && mC<=0){
-    return {bond:true, name:'国债ETF', code:'511010', m:mB, mg:mG, mc:mC};
+    return {bond:true, name:'博时信用债纯债A', code:'050027', m:mB, mg:mG, mc:mC};
   }
   if(mG>=mC){
-    return {bond:false, name:'黄金ETF', code:'518880', m:mG, mc:mC};
+    return {bond:false, name:'黄金ETF联接A', code:'000216', m:mG, mc:mC};
   }else{
-    return {bond:false, cb:true, name:'可转债ETF', code:'511380', m:mC, mc:mG};
+    return {bond:false, cb:true, name:'兴全可转债', code:'340001', m:mC, mc:mG};
   }
 }
 
@@ -158,19 +160,19 @@ function renderSignal(sig){
   const reasonEl=document.getElementById('sigReason');
   if(!sig){ nameEl.textContent='数据不足'; codeEl.textContent=''; reasonEl.textContent='请查看下方手动输入区。'; return; }
   if(sig.bond){
-    nameEl.innerHTML='🛡 全仓 国债ETF';
+    nameEl.innerHTML='🛡 全仓 博时信用债纯债A';
     nameEl.className='big def';
-    codeEl.textContent='代码 511010（都跌，先躲着）';
-    reasonEl.innerHTML=`黄金 <span class="atk">${pct(sig.mg)}</span> 与 可转债 <span class="atk">${pct(sig.mc)}</span> 近12月均下跌 → 买国债躲风险，等信号转正。`;
+    codeEl.textContent='代码 050027（都跌，先躲着）';
+    reasonEl.innerHTML=`黄金 <span class="atk">${pct(sig.mg)}</span> 与 可转债 <span class="atk">${pct(sig.mc)}</span> 近12月均下跌 → 买纯债躲风险，等信号转正。`;
   }else if(sig.cb){
-    nameEl.innerHTML=`📈 全仓 可转债ETF`;
+    nameEl.innerHTML=`📈 全仓 兴全可转债`;
     nameEl.className='big atk';
-    codeEl.textContent='代码 511380（守底进攻）';
+    codeEl.textContent='代码 340001（守底进攻）';
     reasonEl.innerHTML=`可转债近12月动量 <span class="atk">${pct(sig.m)}</span> ＞ 黄金 <span class="atk">${pct(sig.mc)}</span>，黄金偏弱 → 持可转债。`;
   }else{
-    nameEl.innerHTML=`📈 全仓 黄金ETF`;
+    nameEl.innerHTML=`📈 全仓 黄金ETF联接A`;
     nameEl.className='big atk';
-    codeEl.textContent='代码 518880（进攻）';
+    codeEl.textContent='代码 000216（进攻）';
     reasonEl.innerHTML=`黄金近12月动量 <span class="atk">${pct(sig.m)}</span> ＞ 可转债 <span class="atk">${pct(sig.mc)}</span>，黄金偏强 → 持黄金。`;
   }
 }
@@ -180,11 +182,11 @@ function renderMGrid(){
   grid.innerHTML=ASSETS.map(a=>{
     const d=idx[a.code];
     const m=d?d.m:null;
-    const w=Math.min(50, Math.abs(m||0)*100/0.6*0.5); // 0.6=60%动量占半条
+    const w=Math.min(50, Math.abs(m||0)*100/0.6*0.5);
     const bar=m==null?'':`<div class="bar ${m>=0?'pos':'neg'}" style="width:${w}%;${m<0?'left:auto;right:50%;':''}"></div>`;
     return `<div class="mcard">
       <div class="nm">${a.name}</div>
-      <div class="cd">${a.code.replace('sh','')}</div>
+      <div class="cd">${a.code}</div>
       <div class="val ${m==null?'':cls(m)}" style="color:${m==null?'var(--sub)':colorOf(m)}">${pct(m)}</div>
       <div class="barwrap">${bar}</div>
     </div>`;
@@ -197,17 +199,17 @@ function setStatus(kind, text){
 }
 
 async function loadAll(){
-  setStatus('warn','⏳ 正在获取腾讯实时 K 线…');
+  setStatus('warn','⏳ 正在获取天天基金真实净值…');
   let okCount=0;
-  await Promise.all(ASSETS.map(async a=>{
+  for(const a of ASSETS){
     try{
-      const kl=await loadKL(a.code);
-      idx[a.code]={kl, m:mom12(kl), err:false};
+      const nav=await loadNAV(a.code);
+      idx[a.code]={nav, m:mom12(nav), err:false};
       okCount++;
-    }catch(e){ idx[a.code]={kl:null,m:null,err:true}; }
-  }));
+    }catch(e){ idx[a.code]={nav:null,m:null,err:true}; }
+  }
   if(okCount===ASSETS.length){
-    setStatus('ok','✅ 实时数据 · 腾讯前复权 K 线');
+    setStatus('ok','✅ 实时数据 · 天天基金(东财)净值');
     document.getElementById('manualCard').classList.remove('show');
   }else if(okCount>0){
     setStatus('warn',`⚠️ 部分数据获取失败（${okCount}/${ASSETS.length}），可用数据已计算；失败项见手动区`);
@@ -227,8 +229,8 @@ function buildManualInputs(){
   const box=document.getElementById('manualInputs');
   box.innerHTML=ASSETS.map(a=>`
     <div class="minput">
-      <div><label>${a.name}（${a.code.replace('sh','')}）当前价</label><input id="cur_${a.code}" type="number" step="0.001" placeholder="当前价"></div>
-      <div><label>${a.name} 约12月前价</label><input id="old_${a.code}" type="number" step="0.001" placeholder="12月前价"></div>
+      <div><label>${a.name}（${a.code}）当前净值</label><input id="cur_${a.code}" type="number" step="0.0001" placeholder="当前净值"></div>
+      <div><label>${a.name} 约12月前净值</label><input id="old_${a.code}" type="number" step="0.0001" placeholder="12月前净值"></div>
     </div>`).join('');
 }
 
@@ -236,7 +238,7 @@ function calcManual(){
   ASSETS.forEach(a=>{
     const cur=parseFloat(document.getElementById('cur_'+a.code).value);
     const old=parseFloat(document.getElementById('old_'+a.code).value);
-    if(cur>0&&old>0){ idx[a.code]={kl:null, m:cur/old-1, err:false, manual:true}; }
+    if(cur>0&&old>0){ idx[a.code]={nav:null, m:cur/old-1, err:false, manual:true}; }
   });
   const sig=computeSignal();
   renderSignal(sig);
@@ -246,7 +248,6 @@ function calcManual(){
 
 function retryAuto(){ loadAll(); }
 
-// 自动启动
 if(document.readyState!=='loading') loadAll();
 else document.addEventListener('DOMContentLoaded', loadAll);
 </script>
