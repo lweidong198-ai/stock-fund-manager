@@ -329,6 +329,9 @@
   .opp-row .opp-score{font-size:18px;font-weight:800;text-align:center;min-width:42px;}
   .opp-row .opp-tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-top:3px;}
   .opp-row .opp-reason{font-size:11.5px;color:#6b7686;margin-top:3px;line-height:1.35;}
+  .strategy-note{margin:9px 0;padding:9px 12px;border-left:3px solid #2f6fed;background:#f3f7ff;border-radius:6px;font-size:12.5px;line-height:1.55;color:#3a4a63;}
+  .strategy-note b{color:#1f3a6e;}
+  .strategy-note .em{color:#c0392b;font-weight:700;}
   .opp-row .opp-pred{font-size:11.5px;margin-top:4px;line-height:1.35;padding:2px 6px;border-radius:6px;display:inline-block;background:#f4f7fb;border:1px solid #e2e8f2;}
   .opp-row .opp-pred b{font-weight:800;}
   .opp-pred.pred-up{color:var(--up);background:#fdf0f0;border-color:#f6d6d6;}
@@ -739,6 +742,7 @@
             <span class="meta" id="oppTime" style="margin-left:auto;"></span>
           </div>
           <div id="oppBanner" class="regime-banner" style="display:none;"></div>
+          <div class="strategy-note">📊 <b>实测结论（2018–2026 样本外回测 · 180 只老牌主动权益基金）：</b>对基金做「动量轮动 / 3-5 只来回切换」年化仅 <b>1.6%~7.9%</b>，<span class="em">全部跑输「买入持有等权全池」的 9.6%</span>。频繁切换不仅没提高收益，还因换手费+追高而更低。本工具排序仅作<b>描述式参考</b>，不构成买卖建议。</div>
           <details class="bt-details" id="btDetails">
             <summary>📊 策略验证 · 1958只基金 / 155个时点 / 真实样本外（含反面结论与风险）</summary>
             <div id="btBody" class="bt-body">扫描后自动生成…</div>
