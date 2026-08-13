@@ -93,6 +93,36 @@ function loadKlineP(code, period){
     res(kl);
   }, {ignoreReqKey:true}));
 }
+/* 东方财富 K 线兜底（腾讯 fqkline 被 WAF/限流连不上时用）
+ * 实测：push2his.eastmoney.com 返回 200、CORS=*、浏览器 fetch 直接可用、自带前复权(fqt=1)。
+ * 仅在 loadKlineP 返回空（腾讯挂）时调用，腾讯正常时不触发。东财也挂则返回 null（上层诚实标灰“连不上”，不显假数据）。 */
+async function fetchEMKline(secid){
+  const url='https://push2his.eastmoney.com/api/qt/stock/kline/get?secid='+secid
+    +'&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56&klt=101&fqt=1&beg=0&end=20500101&lmt=700&_='+Date.now();
+  let lastErr=null;
+  for(let attempt=0; attempt<2; attempt++){   // 抗限流：单次失败退避 400ms 重试一次
+    const ctrl=new AbortController();
+    const to=setTimeout(()=>{ try{ctrl.abort();}catch(_){} }, 9000);
+    try{
+      const r=await fetch(url, {signal:ctrl.signal});
+      clearTimeout(to);
+      if(!r.ok){ lastErr='HTTP'+r.status; if(attempt===0) await new Promise(rr=>setTimeout(rr,400)); continue; }
+      const d=await r.json();
+      if(!d || d.rc!==0 || !d.data || !d.data.klines || !d.data.klines.length) return null;
+      const kl=d.data.klines.map(s=>{ const p=s.split(','); return {date:p[0], open:+p[1], close:+p[2], high:+p[3], low:+p[4], vol:+p[5]}; });
+      return adjustSplits(kl);   // 东财 fqt=1 已前复权，再叠一层后复权兜底，防个别ETF拆分断崖
+    }catch(e){ lastErr=e.message; clearTimeout(to); if(attempt===0) await new Promise(rr=>setTimeout(rr,400)); }
+  }
+  console.warn('东财K线兜底失败', secid, lastErr);
+  return null;
+}
+async function loadEMKline(code){
+  try{
+    const sh=(code[0]==='6'||code[0]==='5');   // 5/6开头=沪市(secid=1.x)，其余深市(0.x)
+    const kl=await fetchEMKline((sh?'1.':'0.')+code);
+    return kl?adjustSplits(kl):null;
+  }catch(e){ console.warn('东财K线兜底失败', code, e); return null; }
+}
 function klinePct(kl, n){ if(!kl||kl.length<n+1) return null; const a=kl[kl.length-n-1].close, b=kl[kl.length-1].close; return (b-a)/a*100; }
 function sectorLight(c){
   if(c.c60==null||c.c20==null) return {cls:'s-unknown', label:'数据不足', dot:'#bbb'};
@@ -304,11 +334,16 @@ async function renderSectors(){
   }catch(e){ console.warn('sector quotes failed', e); }
   // 相对大盘强度基准：沪深300 日K线（腾讯前复权，零Key）
   let bench60=null;
-  try{ const bk=await loadKlineP('sh000300','d'); bench60=klinePct(bk,60); }catch(e){ console.warn('bench failed', e); }
+  try{
+    let bk=await loadKlineP('sh000300','d');
+    if(!(bk&&bk.length)) bk=await fetchEMKline('1.000300');   // 沪深300沪市，腾讯挂时东财兜底
+    bench60=bk?klinePct(bk,60):null;
+  }catch(e){ console.warn('bench failed', e); }
   // 每只 ETF 拉日K线算 5/20/60 日涨幅 + 量价配合（腾讯前复权，零Key）
   state._demoCodes = new Set();   // 本次扫描中连不上的行业（用于醒目横幅）
   const rows=await Promise.all(POOL.map(async x=>{
-    const kl=await loadKlineP(x.code,'d');
+    let kl=await loadKlineP(x.code,'d');
+    if(!(kl&&kl.length)) kl=await loadEMKline(x.code);   // 腾讯fqkline被WAF/限流连不上 → 东财兜底
     const q=quotes[normCode(x.code)]||{};
     const klMiss = !kl;
     const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);

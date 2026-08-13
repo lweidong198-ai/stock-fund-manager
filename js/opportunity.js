@@ -410,6 +410,7 @@ async function renderRotation() {   // 函数名保留，供 app.js 既有接线
   let bench5 = null, bench20 = null, bench60 = null, bk = null, pos1y = null;
   try {
     bk = await loadKlineP('sh000300', 'd');
+    if(!(bk && bk.length)) bk = await fetchEMKline('1.000300');   // 沪深300沪市，腾讯挂时东财兜底
     bench5 = klinePct(bk, 5); bench20 = klinePct(bk, 20); bench60 = klinePct(bk, 60);
     if (bk && bk.length >= 60) {
       const c250 = bk.slice(-250).map(x => x.close);
@@ -419,7 +420,8 @@ async function renderRotation() {   // 函数名保留，供 app.js 既有接线
   } catch (e) { console.warn('thermo bench failed', e); }
 
   const rows = await Promise.all(POOL.map(async x => {
-    const kl = await loadKlineP(x.code, 'd');
+    let kl = await loadKlineP(x.code, 'd');
+    if(!(kl && kl.length)) kl = await loadEMKline(x.code);   // 腾讯fqkline被WAF/限流连不上 → 东财兜底
     const q = quotes[normCode(x.code)] || {};
     const ind = computeSectorIndicators(kl);
     return {
