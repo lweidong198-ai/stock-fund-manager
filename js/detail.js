@@ -225,8 +225,47 @@ function hideMarketFund(){ const mfd=$('marketFundDetail'); if(mfd) mfd.style.di
 
 
 /* ============ 自选列表 ============ */
+function getWatchItemInfo(w){
+  const code=w.code; let name=code, price='--', cp=null, isFund=w.kind==='fund';
+  if(isFund){ const fd=state.fundData[code]; name=fd?fd.name:(CODE_NAMES[code]||code); if(state.fundFail&&state.fundFail[code]){ price='—'; cp=null; } else { price=fd?fmt(fd.latest,4):'--'; if(fd&&fd.prev)cp=(fd.latest-fd.prev)/fd.prev*100; } }
+  else { const q=state.quotes[code]; if(q){name=q.name;price=fmt(q.price);cp=q.changePct;} }
+  return {name,price,cp,isFund};
+}
+function renderWatchOverview(list){
+  let up=0,down=0,flat=0,sum=0,cnt=0;
+  list.forEach(w=>{ const {cp}=getWatchItemInfo(w); if(cp==null)return; cnt++; sum+=cp; if(cp>0)up++; else if(cp<0)down++; else flat++; });
+  const avg = cnt? sum/cnt : null;
+  let h='<div class="ov-summary">'
+    +'<div class="sm"><div class="sv up">'+up+'</div><div class="sk">上涨</div></div>'
+    +'<div class="sm"><div class="sv down">'+down+'</div><div class="sk">下跌</div></div>'
+    +'<div class="sm"><div class="sv flat">'+flat+'</div><div class="sk">平</div></div>'
+    +'<div class="sm"><div class="sv '+(avg==null?'flat':cls(avg))+'">'+(avg==null?'--':pct(avg))+'</div><div class="sk">平均涨跌</div></div>'
+    +'</div>';
+  h+='<div class="tile-grid">';
+  list.forEach(w=>{
+    const {name,price,cp,isFund}=getWatchItemInfo(w);
+    const ccls = cp==null?'flat':cls(cp);
+    const cpTxt = cp==null?'--':pct(cp);
+    const sel = w.code===state.selected?' sel':'';
+    h+='<div class="tile '+ccls+sel+'" data-code="'+w.code+'">'
+      +'<span class="t-bar"></span>'
+      +'<div class="t-name">'+escapeHtml(name)+'</div>'
+      +'<div class="t-code">'+w.code+(isFund?' · 基':' · 股')+'</div>'
+      +'<div class="t-price">'+price+'</div>'
+      +'<div class="t-chg">'+cpTxt+'</div>'
+      +'</div>';
+  });
+  h+='</div>';
+  return h;
+}
+function syncWatchViewToggle(){
+  const bar=$('watchViewToggle'); if(!bar) return;
+  const cur=state.watchView||'list';
+  bar.querySelectorAll('.tg').forEach(t=>t.classList.toggle('on', t.dataset.v===cur));
+}
 function renderWatch(){
   renderWatchCats();
+  syncWatchViewToggle();
   const box=$('watchBox');
   if(!state.watch.length){ box.innerHTML='<div class="empty">还没有自选，点「载入示例」或输入代码添加</div>'; return; }
   const wf = state.watchFilter||'all';
@@ -234,6 +273,11 @@ function renderWatch(){
   let list = state.watch.filter(w => wf==='all' || (wf==='stock'&&w.kind!=='fund') || (wf==='fund'&&w.kind==='fund'));
   if(wc!=='all') list = list.filter(w => w.cat===wc);
   if(!list.length){ box.innerHTML='<div class="empty">'+(wc==='all'?'该类型下暂无自选':'该分类下暂无自选')+'</div>'; return; }
+  if((state.watchView||'list')==='overview'){
+    box.innerHTML = renderWatchOverview(list);
+    box.querySelectorAll('.tile').forEach(t=>t.onclick=()=>selectCode(t.dataset.code));
+    return;
+  }
   let html='<table class="wl-table"><thead><tr><th>名称 / 代码</th><th>现价</th><th>涨跌%</th><th>分类</th></tr></thead><tbody>';
   list.forEach(w=>{
     const code=w.code; let name=code, price='--', cp=null, isFund=w.kind==='fund';

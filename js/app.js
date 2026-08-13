@@ -167,6 +167,10 @@ document.querySelectorAll('#watchFilter .tg').forEach(t=>t.onclick=()=>{
   t.classList.add('on');
   renderWatch();
 });
+// —— 自选「列表 / 整体」视图切换 ——
+document.querySelectorAll('#watchViewToggle .tg').forEach(t=>t.onclick=()=>{
+  state.watchView=t.dataset.v; save(); syncWatchViewToggle(); renderWatch();
+});
 // —— 自选自定义分类：事件委托（#watchCats 内容由 renderWatchCats 动态重建，故用委托） ——
 $('watchCats').addEventListener('click', e=>{
   const addBtn = e.target.closest('[data-addcat]');
