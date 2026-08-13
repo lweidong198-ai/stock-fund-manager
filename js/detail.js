@@ -275,7 +275,6 @@ function renderWatch(){
   if(!list.length){ box.innerHTML='<div class="empty">'+(wc==='all'?'该类型下暂无自选':'该分类下暂无自选')+'</div>'; return; }
   if((state.watchView||'list')==='overview'){
     box.innerHTML = renderWatchOverview(list);
-    box.querySelectorAll('.tile').forEach(t=>t.onclick=()=>selectCode(t.dataset.code));
     return;
   }
   let html='<table class="wl-table"><thead><tr><th>名称 / 代码</th><th>现价</th><th>涨跌%</th><th>分类</th></tr></thead><tbody>';
