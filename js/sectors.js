@@ -173,6 +173,31 @@ function sectorForecast(c, volCls, rel60, ind){
   const phase=ind?classifyPhase(c,ind,upDir,volCls):'';
   return {cls:cls,label:label,conf:conf,score:Math.round(s),phase:phase};
 }
+/* 短期底部入场机会（描述性，不预测未来涨跌）
+ * 仅刻画“当前技术形态是否呈现短期底部特征”，用于辅助观察，不构成任何买入建议。
+ * 逻辑：先要求近期确实存在回调（前置条件），再统计若干底部/止跌信号是否共振。 */
+function sectorBottom(c, ind){
+  if(c.c5==null||c.c20==null||!ind) return {tier:0,label:'—',cls:'op-none'};
+  const sig = {
+    rsiLow:  ind.rsi!=null && ind.rsi<35,                                          // RSI进入超卖区
+    bbLow:   ind.bb && ind.bb.pos!=null && ind.bb.pos<0.20,                         // 价格贴近布林下轨
+    macdTurn:ind.macd && (ind.macd.state==='crossUp'||ind.macd.state==='bull'),     // 动量转强(DIF上穿DEA/已多头)
+    decel:   c.c5 > c.c20 + 2,                                                     // 近5日优于近20日 → 跌速放缓/止跌
+    biasLow: ind.bias!=null && ind.bias<-5,                                        // 价格显著偏离20日均线(超跌)
+    volC:    ind.vol && ind.vol.regime==='contract'                                // 波动收缩(底部常见铺垫)
+  };
+  // 前置：近期确有回调，否则“底部”无从谈起
+  const pullback = (c.c20<=-4) || (c.c60!=null && c.c60<=-6);
+  if(!pullback) return {tier:0,label:'—',cls:'op-none'};
+  let score = (sig.rsiLow?1:0)+(sig.bbLow?1:0)+(sig.macdTurn?1:0)+(sig.decel?1:0)+(sig.biasLow?1:0)+(sig.volC?1:0);
+  if(ind.vol && ind.vol.ann!=null && ind.vol.ann>55) score=Math.min(score,1);     // 高波动下行途中“底”极不可靠 → 封顶关注
+  let tier,cls,label;
+  if(score>=3){ tier=3; cls='op-strong'; label='强底部信号'; }
+  else if(score>=2){ tier=2; cls='op-mid'; label='底部迹象'; }
+  else if(score>=1){ tier=1; cls='op-weak'; label='关注'; }
+  else { tier=0; cls='op-none'; label='—'; }
+  return {tier,label,cls,sig};
+}
 // 量价配合：近5日均量 vs 60日均量，结合涨跌方向判断量是助攻还是虚涨
 function sectorVolume(kl, c20){
   if(!kl||kl.length<25) return {cls:'vol-flat', label:'量能平稳'};
@@ -302,9 +327,9 @@ function exportSectorText(){
 function exportSectorImage(){
   const box=$('sectorsBody'); if(!box||!box.querySelector('table.sectors')){ alert('请先扫描'); return; }
   const rowsData=[];
-  box.querySelectorAll('tr[data-code]').forEach(tr=>{ const td=tr.querySelectorAll('td'); const g=i=>(td[i]?td[i].textContent.replace(/\s+/g,' ').trim():''); rowsData.push([g(1),g(2),g(3),g(4),g(5),g(6),g(7),g(8),g(9)]); });
-  const head=['行业','代表ETF','当日%','20日%','60日%','趋势','技术面状态','技术强弱分','量能'];
-  const cw=[86,104,62,62,62,76,96,76,76], ch=26, pad=10;
+  box.querySelectorAll('tr[data-code]').forEach(tr=>{ const td=tr.querySelectorAll('td'); const g=i=>(td[i]?td[i].textContent.replace(/\s+/g,' ').trim():''); rowsData.push([g(1),g(2),g(3),g(4),g(5),g(6),g(7),g(8),g(9),g(10)]); });
+  const head=['行业','代表ETF','当日%','20日%','60日%','趋势','技术面状态','技术强弱分','量能','短期底部入场机会'];
+  const cw=[86,104,62,62,62,76,96,76,76,112], ch=26, pad=10;
   const W=pad*2+cw.reduce((a,b)=>a+b,0), H=pad*2+ch*(rowsData.length+1);
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H; const ctx=cv.getContext('2d');
   ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
@@ -359,7 +384,7 @@ async function renderSectors(){
     const vol=klMiss?{cls:'vol-flat',label:'连不上'}:sectorVolume(kl, c20);
     return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct==null?null:(q.changePct||0)), c5:c5, c20:c20, c60:c60, vol:vol, ind:computeSectorIndicators(kl), rel60:(c60==null||bench60==null)?null:(c60-bench60), score:null, phase:'', _kl:kl, klMiss:klMiss };
   }));
-  rows.forEach(r=>{ r._F=sectorForecast(r, r.vol.cls, r.rel60, r.ind); });
+  rows.forEach(r=>{ r._F=sectorForecast(r, r.vol.cls, r.rel60, r.ind); r._B=sectorBottom(r, r.ind); });
   // 连不上清单（用于醒目横幅，绝不显示假数据）
   const demoFails = rows.filter(r=>r.klMiss).map(r=>r.name);
   let demoWarn='';
@@ -394,7 +419,7 @@ async function renderSectors(){
       else r._badge='';
     }
   } else { for(const r of rows) r._badge=''; }
-  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th></tr></thead>';
+  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th><th title="描述性指标：基于RSI超卖/布林下轨/MACD转强/跌速放缓/超跌/波动收缩等技术形态共振，判断当前是否呈现短期底部特征；不预测未来涨跌，仅辅助观察，不构成任何买入建议">短期底部入场机会</th></tr></thead>';
   const watchSet=new Set(loadSectorWatch());
   const body=rows.map((r,i)=>{
     const miss=r.klMiss;
@@ -412,6 +437,8 @@ async function renderSectors(){
     const sc=scoreColor(F.score);
     const scoreTxt=F.score==null?'—':F.score;
     const volCell=miss?'<td>—</td>':'<td><span class="vol-tag '+r.vol.cls+'">'+r.vol.label+'</span></td>';
+    const b=r._B||{cls:'op-none',label:'—'};
+    const botCell=miss?'<td>—</td>':'<td><span class="op-tag '+b.cls+'">'+b.label+'</span></td>';
     return '<tr data-code="'+r.code+'"'+(miss?' class="row-miss"':'')+'>'
       +'<td><span class="rank">'+(i+1)+'</span></td>'
       +'<td><span class="star '+(watchSet.has(r.code)?'on':'')+'" data-code="'+r.code+'">★</span>'+r.name+(r._badge?' <span class="regime-badge '+regime+'">'+r._badge+'</span>':'')+'</td><td>'+r.etf+' <span class="cd" style="font-size:11px;color:var(--sub);">'+r.code+'</span></td>'
@@ -420,10 +447,11 @@ async function renderSectors(){
       +'<td class="'+c60Cls+'">'+c60+'</td>'
       +'<td class="'+L.cls+'"><span class="s-light" style="background:'+L.dot+'"></span>'+L.label+'</td>'
       +'<td class="'+F.cls+'">'+confDot+F.label+(F.phase?' <span class="phase">'+F.phase+'</span>':'')+'</td>'
-      +'<td class="prob-cell conf-'+(F.conf||'')+'" style="color:'+sc+';">'+scoreTxt+'</td>'+volCell+'</tr>';
+      +'<td class="prob-cell conf-'+(F.conf||'')+'" style="color:'+sc+';">'+scoreTxt+'</td>'+volCell+botCell+'</tr>';
   }).join('');
   $('sectorsBanner').innerHTML=demoWarn+regimeBanner;
-  box.innerHTML='<table class="sectors">'+head+'<tbody>'+body+'</tbody></table>';
+  box.innerHTML='<table class="sectors">'+head+'<tbody>'+body+'</tbody></table>'
+    +'<div class="sectors-note">「短期底部入场机会」为<b>描述性</b>技术形态判断（RSI超卖 / 布林下轨 / MACD转强 / 跌速放缓 等信号共振），<b>不预测未来涨跌</b>，仅辅助观察；高波动下行途中的“底”极不可靠，已自动降级。不构成任何买入建议。</div>';
   const rev=detectReversal(rows);
   const al=$('sectorAlert');
   if(al){
