@@ -123,6 +123,13 @@ async function loadEMKline(code){
     return kl?adjustSplits(kl):null;
   }catch(e){ console.warn('东财K线兜底失败', code, e); return null; }
 }
+// 新浪JSONP兜底（腾讯+东财都挂时，沙箱IP常连不上东财，但新浪JSONP两端均可用，未复权但为真数据）
+async function loadSinaKlineP(code){
+  try{
+    const kl=await loadKlineSina(code,'d',700);
+    return (kl&&kl.length)?adjustSplits(kl):null;   // 新浪未复权，叠后复权兜底防拆分断崖
+  }catch(e){ console.warn('新浪K线兜底失败', code, e); return null; }
+}
 function klinePct(kl, n){ if(!kl||kl.length<n+1) return null; const a=kl[kl.length-n-1].close, b=kl[kl.length-1].close; return (b-a)/a*100; }
 function sectorLight(c){
   if(c.c60==null||c.c20==null) return {cls:'s-unknown', label:'数据不足', dot:'#bbb'};
@@ -337,6 +344,7 @@ async function renderSectors(){
   try{
     let bk=await loadKlineP('sh000300','d');
     if(!(bk&&bk.length)) bk=await fetchEMKline('1.000300');   // 沪深300沪市，腾讯挂时东财兜底
+    if(!(bk&&bk.length)) bk=await loadSinaKlineP('sh000300');   // 东财也挂(沙箱IP常被挡) → 新浪兜底
     bench60=bk?klinePct(bk,60):null;
   }catch(e){ console.warn('bench failed', e); }
   // 每只 ETF 拉日K线算 5/20/60 日涨幅 + 量价配合（腾讯前复权，零Key）
@@ -344,6 +352,7 @@ async function renderSectors(){
   const rows=await Promise.all(POOL.map(async x=>{
     let kl=await loadKlineP(x.code,'d');
     if(!(kl&&kl.length)) kl=await loadEMKline(x.code);   // 腾讯fqkline被WAF/限流连不上 → 东财兜底
+    if(!(kl&&kl.length)) kl=await loadSinaKlineP(x.code);   // 东财也挂(沙箱IP常被挡) → 新浪兜底
     const q=quotes[normCode(x.code)]||{};
     const klMiss = !kl;
     const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);

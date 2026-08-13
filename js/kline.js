@@ -74,8 +74,12 @@ function loadKline(code, period, cb, opt){
         return kl;
       }).catch(()=> attempt<2 ? new Promise(r=>setTimeout(()=>r(fetchTail(attempt+1)), 300*(attempt+1))) : []);
       fetchTail().then(kl=>{
-        if(!kl.length){ fin(demoKline(code, period), true); return; }
-        fin(kl, false);
+        if(kl.length){ fin(kl, false); return; }
+        // 腾讯tail失败 → 新浪tail兜底（取最近若干根）
+        loadKlineSina(code, period, 12).then(sina=>{
+          if(sina && sina.length){ fin(sina.slice(-8), false); return; }
+          fin(demoKline(code, period), true);
+        });
       });
       return;
     }
@@ -102,27 +106,33 @@ function loadKline(code, period, cb, opt){
     // 首屏立即出图，再后台补全历史
     // 关键：首屏必须用 fetchSegR（带3次退避重试）。沙箱IP常被腾讯WAF偶发限流/返回空，
     // 旧版 fetchSeg 无重试 → 直接 fallback demoKline（随机价格20-70元），表现为“K线只看到四月份”。
+    // 腾讯首屏失败 → 新浪JSONP兜底（沙箱IP与浏览器均可用，未复权，但为真数据）；新浪也挂 → 诚实演示
+    const trySina = ()=> loadKlineSina(code, period).then(sina=>{
+      if(sina && sina.length){ fin(sina, false); return; }
+      fin(demoKline(code, period), true);
+    });
     fetchSegR(today).then(first=>{
-      if(!first.length){ fin(demoKline(code, period), true); return; }
-      fin(first, false);                       // 首屏立即渲染
-      // 仅当调用方接了 onHistory（详情页交互视图）才做补全+自检；批量扫描不接 onHistory，跳过以免刷屏告警
-      if(typeof opt.onHistory === 'function'){
-        const extend = (round) => pullHistory(first).then(({all, stopped})=>{
-          const fullS = sanitizeKline(all);   // 关键：补全的历史也必须清洗，否则脏负价/周末 bar 混进缓存→曾修好的“一条线”复发
-          if(fullS.length > first.length) opt.onHistory(fullS);
-          // —— 历史完整性自检（每次加载都检测，防“最远只到某近期日期”）——
-          // 判据：首屏触到单段上限(640) 且 后台因“空段”(限流)中止 且 实际未扩展 → 补全失败，K线停在≈2.5年。
-          // 命中“真实历史尽头”(noearlier) 或 已正常扩展 都不告警，避免误报。
-          const warn = klineTruncWarn(first.length, fullS.length, period, stopped);
-          const DC = window.DataCalibrator;
-          if(warn){
-            if(round < 1){ setTimeout(()=>extend(round+1), 900); return; }   // 自动重试一次，自愈偶发限流
-            if(DC) DC.reportKline(code, [warn]);                            // 仍失败 → 角标提示（行情区「重试」可补）
-          } else if(DC) DC.reportKline(code, []);                           // 正常 → 清除可能的历史告警
-        });
-        extend(0);
+      if(first.length){
+        fin(first, false);                       // 首屏立即渲染（腾讯前复权，优先）
+        // 仅当调用方接了 onHistory（详情页交互视图）才做补全+自检；批量扫描不接 onHistory，跳过以免刷屏告警
+        if(typeof opt.onHistory === 'function'){
+          const extend = (round) => pullHistory(first).then(({all, stopped})=>{
+            const fullS = sanitizeKline(all);   // 关键：补全的历史也必须清洗，否则脏负价/周末 bar 混进缓存→曾修好的“一条线”复发
+            if(fullS.length > first.length) opt.onHistory(fullS);
+            // —— 历史完整性自检（每次加载都检测，防“最远只到某近期日期”）——
+            const warn = klineTruncWarn(first.length, fullS.length, period, stopped);
+            const DC = window.DataCalibrator;
+            if(warn){
+              if(round < 1){ setTimeout(()=>extend(round+1), 900); return; }   // 自动重试一次，自愈偶发限流
+              if(DC) DC.reportKline(code, [warn]);                            // 仍失败 → 角标提示（行情区「重试」可补）
+            } else if(DC) DC.reportKline(code, []);                           // 正常 → 清除可能的历史告警
+          });
+          extend(0);
+        }
+        return;
       }
-    }).catch(e=>{ console.error('loadKline tencent error', code, e); fin(demoKline(code, period), true); });
+      return trySina();   // 腾讯首屏空（沙箱IP被WAF/限流/断网）→ 新浪兜底
+    }).catch(e=>{ console.error('loadKline tencent error', code, e); return trySina(); });
     return;
   }
 
@@ -141,6 +151,35 @@ function loadKline(code, period, cb, opt){
   s.onerror=function(e){ console.error('loadKline network error', code, e); fin(demoKline(code, period), true); };
   s.src='https://money.finance.sina.com.cn/quotes_service/api/jsonp_v2.php/var%20'+name+'=/CN_MarketData.getKLineData?symbol='+sym+'&scale='+scale+'&ma=5&datalen=5000&_='+Date.now();
   document.body.appendChild(s);
+}
+
+/* ============ K线：A股/ETF 新浪JSONP兜底（腾讯fqkline被WAF/限流时） ============
+ * 实测：money.finance.sina.com.cn 的 getKLineData 从沙箱服务器IP也能返回200真实数据，
+ *       且走 <script> JSONP（浏览器不受CORS限制），沙箱/本机浏览器均可用。
+ * 仅作兜底：数据为「未复权」，分红/拆分处可能跳变，但远优于演示假数据。
+ * 腾讯正常时不触发；腾讯挂才用；新浪也挂才诚实演示。 */
+function loadKlineSina(code, period, datalen){
+  return new Promise((resolve)=>{
+    const sym = sinaSymbol(normCode(code) || code);
+    const scale = period==='w'?1200:240;
+    const dl = datalen || 5000;
+    const name = 'kcb'+Math.random().toString(36).slice(2)+Date.now();
+    let done=false;
+    const s=document.createElement('script');
+    const ondone=(kl)=>{ if(done)return; done=true; try{document.body.removeChild(s);}catch(_){} resolve(kl||[]); };
+    s.onload=function(){
+      const arr = window[name];
+      try{
+        const kl = (arr||[]).map(x=>({ date:x.day, open:+x.open, high:+x.high, low:+x.low, close:+x.close, vol:+x.volume }))
+                           .filter(x=>x.close>0 && x.date);
+        ondone(kl);
+      }catch(e){ ondone([]); }
+    };
+    s.onerror=function(){ ondone([]); };
+    s.src='https://money.finance.sina.com.cn/quotes_service/api/jsonp_v2.php/var%20'+name+'=/CN_MarketData.getKLineData?symbol='+sym+'&scale='+scale+'&ma=5&datalen='+dl+'&_='+Date.now();
+    document.body.appendChild(s);
+    setTimeout(()=>ondone([]), 12000);   // 脚本加载超时兜底
+  });
 }
 
 /* ============ K线历史完整性自检 ============
