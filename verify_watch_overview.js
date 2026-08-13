@@ -98,7 +98,7 @@ const link=[
   ['index.html 含 整体 选项', idx.includes('data-v="overview"')],
   ['detail.js 含 overview 分支', detail.includes("state.watchView||'list')==='overview'")&&detail.includes('renderWatchOverview(list)')],
   ['detail.js 定义 renderWatchOverview', detail.includes('function renderWatchOverview(')],
-  ['detail.js 整体视图不再绑定tile点击(不弹K线)', !detail.includes(".tile').forEach")],
+  ['detail.js 整体视图仍绑定tile点击(点卡片看K线)', detail.includes(".tile').forEach")],
 ];
 let lok=true;
 for(const [n,c] of link){ if(!c){ console.error('FAIL 接链:',n); lok=false; } }
