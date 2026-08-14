@@ -68,6 +68,19 @@ function drawMain(kl){
       const vy=Yv(k.vol); ctx.fillStyle=up?'rgba(224,31,34,0.55)':'rgba(15,157,88,0.55)';
       ctx.fillRect(x-bw/2, vy, bw, h-vy);
     }
+    // 历史底部拐点标记（金色圆点+上指三角）：仅当当前选中标的在行业扫描中被标记过拐点
+    try{
+      const revSet=(state.revMarks && state.selected && state.revMarks[state.selected])||null;
+      if(revSet && revSet.length){
+        for(let i=0;i<n;i++){
+          if(revSet.indexOf(sub[i].date)>=0){
+            const x=X(i), y=Y(sub[i].high);
+            ctx.fillStyle='#0a7d3c'; ctx.beginPath(); ctx.arc(x, y-7, 3.2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(x,y-7); ctx.lineTo(x-3.4,y-2.5); ctx.lineTo(x+3.4,y-2.5); ctx.closePath(); ctx.fill();
+          }
+        }
+      }
+    }catch(e){}
     function line(arr,color){ ctx.strokeStyle=color; ctx.lineWidth=1.2; ctx.beginPath(); let started=false;
       for(let i=0;i<n;i++){ if(arr[i]==null){started=false;continue;} const x=X(i),y=Y(arr[i]); if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);} ctx.stroke(); }
     if(ind.ma){ line(ma5,'#d99a00'); line(ma10,'#2b7de9'); line(ma20,'#d651a8'); line(ma60,'#7a52d6'); }

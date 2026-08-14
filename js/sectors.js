@@ -204,6 +204,61 @@ function bottomSigHTML(b){
   if(!sl.length) return '';
   return '<div class="op-sigs">'+sl.map(s=>'<span class="op-sig">'+s+'</span>').join('')+'</div>';
 }
+
+// ===== 底部「反转确认」：基于已发生K线描述“跌势结束、开始转强”（描述性，不预测未来） =====
+// 与 sectorBottom（刻画“够不够低/是否超卖止跌”）互补：本组刻画“是不是开始起来了”。
+function smaFull(arr,n){ const out=new Array(arr.length).fill(null); let s=0; for(let i=0;i<arr.length;i++){ s+=arr[i]; if(i>=n) s-=arr[i-n]; if(i>=n-1) out[i]=s/n; } return out; }
+function calcMacdFull(closes, fast, slow, sig){ fast=fast||12;slow=slow||26;sig=sig||9; const ef=emaArr(closes,fast),es=emaArr(closes,slow); const dif=ef.map((v,i)=>v-es[i]); const dea=emaArr(dif,sig); const hist=dif.map((v,i)=>(v-dea[i])*2); const state=hist.map((v,i)=> i>0 ? (v>0&&hist[i-1]<=0?'crossUp':(v<0&&hist[i-1]>=0?'crossDown':(v>0?'bull':'bear'))) : (v>0?'bull':'bear')); return {dif,dea,hist,state}; }
+function klinePctFrom(closes,i,n){ if(i-n<0) return null; const a=closes[i-n], b=closes[i]; return (b-a)/a*100; }
+function avgArr(a){ if(!a||!a.length) return 0; let s=0; for(const v of a) s+=v; return s/a.length; }
+const REV_SIG_LABELS={macdCrossUp:'MACD金叉',maRecover:'站上5日线',volConfirm:'放量确认',breakHigh:'突破前高',stabilize:'跌速转升'};
+// 单点（当前最后一根）反转确认：≥2 个信号共振才确认（多重确认防假信号）
+function sectorReversal(c, ind, kl){
+  if(!c||c.c20==null||!ind||!kl||kl.length<60) return {confirmed:false,tier:0,label:'',cls:'op-none',sig:{}};
+  if(!(c.c20<=0 || c.c60<=0)) return {confirmed:false,tier:0,label:'',cls:'op-none',sig:{}};  // 前置：近期偏弱才谈“拐点”
+  const closes=kl.map(x=>x.close); const n=closes.length; const i=n-1;
+  const sma5=smaFull(closes,5);
+  const sig={};
+  sig.macdCrossUp = (ind.macd && ind.macd.state==='crossUp');                                   // MACD金叉(DIF上穿DEA)
+  sig.maRecover = (sma5[i]!=null && closes[i]>sma5[i] && sma5[i]>=sma5[i-1]);                    // 站上5日线且5日线拐头向上
+  const vols=kl.map(x=>x.vol); const v5=avgArr(vols.slice(n-5)), v20=avgArr(vols.slice(Math.max(0,n-20)));
+  sig.volConfirm = (v20>0 && v5>v20*1.15 && kl[i].close>=kl[i].open);                            // 放量且当日收阳
+  const win=kl.slice(Math.max(0,n-10), n-1).map(x=>x.high); const prevHigh=win.length?Math.max(...win):0;
+  sig.breakHigh = (prevHigh>0 && kl[i].close>prevHigh);                                          // 突破前10日最高(平台突破)
+  sig.stabilize = (c.c5 > 0 && c.c5 > c.c20 + 1);                                              // 近5日已转为上涨且显著优于中期→止跌转升（持续下跌中 c5<0 不亮）
+  let score=(sig.macdCrossUp?1:0)+(sig.maRecover?1:0)+(sig.volConfirm?1:0)+(sig.breakHigh?1:0)+(sig.stabilize?1:0);
+  const confirmed = score>=2;
+  const tier=confirmed?2:(score>=1?1:0), cls=confirmed?'op-rev':'op-none', label=confirmed?'已现拐点':(score>=1?'拐点迹象':'');
+  return {confirmed,tier,label,cls,sig};
+}
+function revSigHTML(rv){
+  if(!rv||!rv.sig) return '';
+  const sl=Object.keys(REV_SIG_LABELS).filter(k=>rv.sig[k]).map(k=>REV_SIG_LABELS[k]);
+  if(!sl.length) return '';
+  return '<div class="op-sigs">'+sl.map(s=>'<span class="op-sig">'+s+'</span>').join('')+'</div>';
+}
+// 历史回看：逐根判定“反转确认”，返回拐点日期数组（升序），供表内“最近拐点”与K线图标记复用
+function sectorReversalSeries(kl){
+  if(!kl||kl.length<60) return [];
+  const closes=kl.map(x=>x.close); const n=closes.length;
+  const sma5=smaFull(closes,5);
+  const m=calcMacdFull(closes);
+  const vols=kl.map(x=>x.vol); const v5f=smaFull(vols,5), v20f=smaFull(vols,20);
+  const out=[];
+  for(let i=60;i<n;i++){
+    const c20k=klinePctFrom(closes,i,20), c60k=klinePctFrom(closes,i,60);
+    if(!(c20k<=0||c60k<=0)) continue;
+    let sc=0;
+    if(m.state[i]==='crossUp') sc++;
+    if(sma5[i]!=null && closes[i]>sma5[i] && sma5[i]>=sma5[i-1]) sc++;
+    if(v20f[i]>0 && v5f[i]>v20f[i]*1.15 && kl[i].close>=kl[i].open) sc++;
+    const win=kl.slice(Math.max(0,i-10), i).map(x=>x.high); const ph=win.length?Math.max(...win):0;
+    if(ph>0 && kl[i].close>ph) sc++;
+    const c5k=klinePctFrom(closes,i,5); if(c5k>0 && c5k>c20k+1) sc++;
+    if(sc>=2) out.push(kl[i].date);
+  }
+  return out;
+}
 // 量价配合：近5日均量 vs 60日均量，结合涨跌方向判断量是助攻还是虚涨
 function sectorVolume(kl, c20){
   if(!kl||kl.length<25) return {cls:'vol-flat', label:'量能平稳'};
@@ -390,7 +445,13 @@ async function renderSectors(){
     const vol=klMiss?{cls:'vol-flat',label:'连不上'}:sectorVolume(kl, c20);
     return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct==null?null:(q.changePct||0)), c5:c5, c20:c20, c60:c60, vol:vol, ind:computeSectorIndicators(kl), rel60:(c60==null||bench60==null)?null:(c60-bench60), score:null, phase:'', _kl:kl, klMiss:klMiss };
   }));
-  rows.forEach(r=>{ r._F=sectorForecast(r, r.vol.cls, r.rel60, r.ind); r._B=sectorBottom(r, r.ind); });
+  rows.forEach(r=>{ r._F=sectorForecast(r, r.vol.cls, r.rel60, r.ind); r._B=sectorBottom(r, r.ind);
+    if(!r.klMiss){ r._R=sectorReversal(r, r.ind, r._kl); r._revDates=sectorReversalSeries(r._kl);
+      const li=r._revDates.length?r._kl.findIndex(x=>x.date===r._revDates[r._revDates.length-1]):-1;
+      r._revRecent=(li>=0 && r._kl.length-li<=60);
+    }
+    else { r._R={confirmed:false,tier:0,label:'',cls:'op-none',sig:{}}; r._revDates=[]; r._revRecent=false; }
+  });
   // 连不上清单（用于醒目横幅，绝不显示假数据）
   const demoFails = rows.filter(r=>r.klMiss).map(r=>r.name);
   let demoWarn='';
@@ -425,7 +486,7 @@ async function renderSectors(){
       else r._badge='';
     }
   } else { for(const r of rows) r._badge=''; }
-  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th><th title="描述性技术形态判断（RSI超卖/布林下轨/MACD转强/跌速放缓/超跌/波动收缩共振）。仅当≥3个信号共振标记为「强底部信号」——历史回测显示其之后20日有微弱超额(~+1%、胜率约54%，统计显著)，本质为跌多短期均值回归。其余仅标「形态观察」，不构成可靠底部判断，更不构成买入建议。">短期底部入场机会</th></tr></thead>';
+  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th><th title="描述性技术形态判断（RSI超卖/布林下轨/MACD转强/跌速放缓/超跌/波动收缩共振）。仅当≥3个信号共振标记为「强底部信号」——历史回测显示其之后20日有微弱超额(~+1%、胜率约54%，统计显著)，本质为跌多短期均值回归。其余仅标「形态观察」，不构成可靠底部判断，更不构成买入建议。本列另含「↗已现拐点」：≥2个转强信号共振(MACD金叉/站上5日线/放量确认/突破前高/跌速转升)即标记，描述跌势结束开始转强，不预测未来；并附「最近拐点」日期(近60日首次转强时点)。">短期底部入场机会</th></tr></thead>';
   const watchSet=new Set(loadSectorWatch());
   const body=rows.map((r,i)=>{
     const miss=r.klMiss;
@@ -444,7 +505,11 @@ async function renderSectors(){
     const scoreTxt=F.score==null?'—':F.score;
     const volCell=miss?'<td>—</td>':'<td><span class="vol-tag '+r.vol.cls+'">'+r.vol.label+'</span></td>';
     const b=r._B||{cls:'op-none',label:'—'};
-    const botInner=miss?'—':'<span class="op-tag '+b.cls+'">'+b.label+'</span>'+(b.tier>=1?bottomSigHTML(b):'');
+    const rev=r._R||{confirmed:false,label:'',sig:{}};
+    const revTag = miss?'':(rev.confirmed?'<span class="op-rev-tag">↗'+rev.label+'</span>'+revSigHTML(rev):'');
+    const lastRev = (!miss && r._revDates && r._revDates.length)? r._revDates[r._revDates.length-1] : '';
+    const revDateTag = lastRev? '<div class="rev-date'+(r._revRecent?'':' dim')+'">最近拐点 '+lastRev.slice(5)+(r._revRecent?'':'·超60日')+'</div>' : '';
+    const botInner=miss?'—':'<span class="op-tag '+b.cls+'">'+b.label+'</span>'+(b.tier>=1?bottomSigHTML(b):'')+revTag+revDateTag;
     const botCell='<td>'+botInner+'</td>';
     return '<tr data-code="'+r.code+'"'+(miss?' class="row-miss"':'')+'>'
       +'<td><span class="rank">'+(i+1)+'</span></td>'
@@ -458,13 +523,14 @@ async function renderSectors(){
   }).join('');
   $('sectorsBanner').innerHTML=demoWarn+regimeBanner;
   box.innerHTML='<table class="sectors">'+head+'<tbody>'+body+'</tbody></table>'
-    +'<div class="sectors-note">「短期底部入场机会」为<b>描述性</b>技术形态判断（RSI超卖 / 布林下轨 / MACD转强 / 跌速放缓 等信号共振），<b>不预测未来涨跌</b>。仅「<b>强底部信号</b>」(≥3个信号共振)经真实数据回测有微弱超额（之后20日约+1%、胜率约54%，统计显著），属跌多短期均值回归；其余仅标「形态观察」，<b>不构成可靠底部判断，更不构成买入建议</b>。高波动下行途中的“底”极不可靠，已自动降级。</div>';
+    +'<div class="sectors-note">「短期底部入场机会」为<b>描述性</b>技术形态判断（RSI超卖 / 布林下轨 / MACD转强 / 跌速放缓 等信号共振），<b>不预测未来涨跌</b>。仅「<b>强底部信号</b>」(≥3个信号共振)经真实数据回测有微弱超额（之后20日约+1%、胜率约54%，统计显著），属跌多短期均值回归；其余仅标「形态观察」，<b>不构成可靠底部判断，更不构成买入建议</b>。高波动下行途中的“底”极不可靠，已自动降级。<br>「↗已现拐点」为<b>描述性</b>“跌势结束、开始转强”信号（MACD金叉 / 站上5日线 / 放量确认 / 突破前高 / 跌速转升 中≥2个共振），<b>不预测未来涨跌</b>；只陈述“当前已出现转强迹象”，不构成买入建议。下方「最近拐点」为近60日首次转强时点，供回看信号历史表现。</div>';
   const rev=detectReversal(rows);
   const al=$('sectorAlert');
   if(al){
     if(rev.weak+rev.strong>0){ al.textContent='⚠ 本周期 '+(rev.weak+rev.strong)+' 个行业趋势反转（'+rev.weak+' 转弱 / '+rev.strong+' 转强）'+((rev.weakWatch+rev.strongWatch)>0?('，其中 '+(rev.weakWatch+rev.strongWatch)+' 个为你自选'):''); al.className='alert warn'; }
     else { al.textContent='✓ 本周期无趋势反转'; al.className='alert ok'; }
   }
+  state.revMarks = {}; rows.forEach(r=>{ if(!r.klMiss) state.revMarks[normCode(r.code)] = r._revDates; });   // 供K线图标记历史拐点
   $('sectorTime').textContent='更新 '+ts();
   box.querySelectorAll('.star').forEach(s=>s.onclick=(e)=>{ e.stopPropagation(); toggleSectorWatch(s.dataset.code); s.classList.toggle('on'); });
   box.querySelectorAll('tr[data-code]').forEach(tr=>tr.onclick=()=>{
