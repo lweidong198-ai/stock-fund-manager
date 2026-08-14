@@ -239,6 +239,8 @@ function revSigHTML(rv){
 }
 // 已现拐点 悬停白话说明（事件委托到 [data-tip]）
 const REV_TIP='已现拐点 = 这只之前一直在跌，现在出现了开始转强的痕迹。\n不是预测会涨，是“已经发生”的转强事实。\n判定：近期偏弱 + 5个转强信号里≥2个共振（MACD金叉 / 站上5日线且拐头 / 放量 / 突破前10日最高 / 近5日实际转涨）。\n方向：偏多（跌转涨的见底信号），不是看空。\n注意：信号后60日上涨概率约45%~49%（接近随机，不算高）；价值不在“必胜”，而在“平均有正收益（约+1%/20日、t显著）且比右侧确认更提前”——少数大跌后的强反弹撑起正均值。只当左侧观察记号，不喊抄底、不构成买入建议。';
+// 极低估·长持机会 悬停白话说明（事件委托到 [data-tip]）
+const DV_TIP='极低估·长持机会 = 这只行业ETF跌到了“历史最便宜一档”+周线超卖+单周暴跌，是“已跌透”的极端便宜信号。\n判定(周线)：估值分位<5%(处于历史最低5%) + 周RSI<22 + 单周跌幅>3%，且近期偏弱。\n历史回测(40只行业ETF, 2022-2026 walk-forward)：信号出现后买入并持有250日(约一年)，绝对上涨概率约81%(n≈52)，平均收益约+17%。\n代价(必读)：①必须拿得住一年——持有60~180日命中率仅55~67%，到一年才跳回80%+；②跑赢大盘仅约40%(涨是随市场beta，非超额alpha)；③信号极稀有(全市场全周期约52次)。\n本质=“极端恐惧时贪婪”的价值式信号，不是技术拐点预测。仅作极端价值观察，不喊抄底、不构成买入建议。';
 // 历史回看：逐根判定“反转确认”，返回拐点日期数组（升序），供表内“最近拐点”与K线图标记复用
 function sectorReversalSeries(kl){
   if(!kl||kl.length<60) return [];
@@ -260,6 +262,32 @@ function sectorReversalSeries(kl){
     if(sc>=2) out.push(kl[i].date);
   }
   return out;
+}
+/* ============ 极低估·长持机会（周线降噪 + 极端便宜事件）============
+ * 判定(周线)：估值分位<5%(历史最低5%) + 周RSI<22 + 单周跌幅>3%，且近期偏弱。
+ * 仅对“最新一周”判定是否当前触发（实时信号）。数据不足250周返回 null。
+ * 依据：walk-forward 回测(40只行业ETF,2022-2026)——持有250日绝对上涨命中约81%(n≈52)，均值+17%。
+ */
+function toWeeksDV(kl){ const w=[]; for(let i=0;i+4<kl.length;i+=5){ const seg=kl.slice(i,i+5); w.push({date:seg[seg.length-1].date, close:seg[seg.length-1].close}); } return w; }
+function sectorDeepValue(kl){
+  if(!kl||kl.length<1250) return null;            // 需约250周(1250日)才算估值分位
+  const w=toWeeksDV(kl), wl=w.length; if(wl<260) return null;
+  const closes=w.map(x=>x.close), n=wl, i=n-1;
+  // 周RSI(14)
+  let g=0,l=0; for(let k=i-13;k<=i;k++){ if(k>0){ const d=closes[k]-closes[k-1]; if(d>=0)g+=d; else l-=d; } }
+  const rs=(g+l>0)?(g/l):0, rsi=100-100/(1+rs);
+  // 估值分位(250周窗口，含自身)
+  const win=closes.slice(Math.max(0,i-249), i+1);
+  let lo=0,eq=0; for(const v of win){ if(v<closes[i]) lo++; else if(v===closes[i]) eq++; }
+  const frac=win.length? (lo+eq/2)/win.length : 1;
+  // 单周跌幅
+  const wkDrop=(i>=1)?(closes[i]/closes[i-1]-1)*100 : 0;
+  // 周线弱市(c20/c60)
+  const pct=(idx,win2)=>{ if(idx<win2-1) return 0; const m=closes.slice(idx-win2+1,idx+1); return (closes[idx]/m.reduce((s,x)=>s+x,0)/win2-1)*100; };
+  const wc20=pct(i,20), wc60=pct(i,60);
+  const weak=(wc20<=0||wc60<=0);
+  const trig = weak && frac<0.05 && rsi<22 && wkDrop<-3;
+  return {triggered:trig, rsi:Math.round(rsi), frac:Math.round(frac*100)/100, wkDrop:Math.round(wkDrop*10)/10, weekDate:w[i].date, weak, reason: trig?'':'未满足全部条件'};
 }
 // 量价配合：近5日均量 vs 60日均量，结合涨跌方向判断量是助攻还是虚涨
 function sectorVolume(kl, c20){
@@ -451,8 +479,9 @@ async function renderSectors(){
     if(!r.klMiss){ r._R=sectorReversal(r, r.ind, r._kl); r._revDates=sectorReversalSeries(r._kl);
       const li=r._revDates.length?r._kl.findIndex(x=>x.date===r._revDates[r._revDates.length-1]):-1;
       r._revRecent=(li>=0 && r._kl.length-li<=60);
+      r._dv=sectorDeepValue(r._kl);
     }
-    else { r._R={confirmed:false,tier:0,label:'',cls:'op-none',sig:{}}; r._revDates=[]; r._revRecent=false; }
+    else { r._R={confirmed:false,tier:0,label:'',cls:'op-none',sig:{}}; r._revDates=[]; r._revRecent=false; r._dv=null; }
   });
   // 连不上清单（用于醒目横幅，绝不显示假数据）
   const demoFails = rows.filter(r=>r.klMiss).map(r=>r.name);
@@ -509,9 +538,10 @@ async function renderSectors(){
     const b=r._B||{cls:'op-none',label:'—'};
     const rev=r._R||{confirmed:false,label:'',sig:{}};
     const revTag = miss?'':(rev.confirmed?'<span class="op-rev-tag" data-tip="'+REV_TIP+'">↗'+rev.label+'</span>'+revSigHTML(rev):'');
+    const dvTag = (!miss && r._dv && r._dv.triggered)? '<span class="op-dv-tag" data-tip="'+DV_TIP+'">↙极低估·长持</span>' : '';
     const lastRev = (!miss && r._revDates && r._revDates.length)? r._revDates[r._revDates.length-1] : '';
     const revDateTag = lastRev? '<div class="rev-date'+(r._revRecent?'':' dim')+'">最近拐点 '+lastRev.slice(5)+(r._revRecent?'':'·超60日')+'</div>' : '';
-    const botInner=miss?'—':'<span class="op-tag '+b.cls+'">'+b.label+'</span>'+(b.tier>=1?bottomSigHTML(b):'')+revTag+revDateTag;
+    const botInner=miss?'—':'<span class="op-tag '+b.cls+'">'+b.label+'</span>'+(b.tier>=1?bottomSigHTML(b):'')+revTag+dvTag+revDateTag;
     const botCell='<td>'+botInner+'</td>';
     return '<tr data-code="'+r.code+'"'+(miss?' class="row-miss"':'')+'>'
       +'<td><span class="rank">'+(i+1)+'</span></td>'
