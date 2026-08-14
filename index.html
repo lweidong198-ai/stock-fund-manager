@@ -320,6 +320,10 @@
   .msub .mname{font-weight:600;font-size:13px;}
   /* 持仓管理：止盈/止损价输入、回本小字、组合头卡回本/预警 */
   .ain{width:72px;padding:3px 5px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--panel);color:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;}
+  .addcash-cell{display:flex;gap:4px;align-items:center;white-space:nowrap;}
+  .ain-btn{background:var(--accent);color:#06101f;border:none;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .ain-btn:hover{filter:brightness(1.08);}
+  .ain-btn:active{transform:translateY(1px);}
   .cellsub{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.3;}
   .pnl-extra{display:block;font-size:11px;font-weight:600;color:var(--flat);margin-top:2px;}
   /* 顶部大盘指数条 */
@@ -776,7 +780,7 @@
           <input id="fileImport" type="file" accept="application/json" style="display:none;" />
         </div>
         <div class="summary" id="holdSummary"></div>
-        <div class="explain">📘 <b>怎么读</b>：市值 = 现在这些持仓总共值多少钱；浮动盈亏 = 按现价卖出能赚/亏多少；<b>收益率</b> = (现价−成本价)÷成本价，正数是赚、负数是亏。<b>输入代码自动识别股票/基金</b>，填数量和买入成本价，点「加持仓」即可。<b>持仓与自选互相独立</b>——不必先加自选，删自选也不影响持仓。<b style="color:#c0392b">提醒：数据只存在你当前这个浏览器网址里，换设备/清缓存/开无痕都会丢，建议偶尔点「导出备份」存个 json 文件。</b></div>
+        <div class="explain">📘 <b>怎么读</b>：市值 = 现在这些持仓总共值多少钱；浮动盈亏 = 按现价卖出能赚/亏多少；<b>收益率</b> = (现价−成本价)÷成本价，正数是赚、负数是亏。<b>输入代码自动识别股票/基金</b>，填数量和买入成本价，点「加持仓」即可。<b>持仓与自选互相独立</b>——不必先加自选，删自选也不影响持仓。<b>一键加仓</b>：在每只持仓的「加仓(一键)」列填入<b>今天想买入的金额</b>，点「加仓」会按<b>当前现价/净值</b>自动算出可买股数（股票按 100 股/手取整、基金按小数份额），并<b>加权更新成本价和数量</b>，无需你手算。买入价以当前行情价为准、非成交价，仅供参考。<b style="color:#c0392b">提醒：数据只存在你当前这个浏览器网址里，换设备/清缓存/开无痕都会丢，建议偶尔点「导出备份」存个 json 文件。</b></div>
         <div id="holdBox"></div>
       </div>
     </div>

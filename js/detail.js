@@ -389,10 +389,11 @@ function renderHold(){
         +'<td class="'+cls(day)+'">'+fmt(day)+'</td>'
         +'<td><input class="ain" type="number" step="0.01" min="0" data-ai="target" data-code="'+h.code+'" value="'+(h.target?h.target:'')+'" placeholder="止盈"></td>'
         +'<td><input class="ain" type="number" step="0.01" min="0" data-ai="stop" data-code="'+h.code+'" value="'+(h.stop?h.stop:'')+'" placeholder="止损"></td>'
+        +'<td><div class="addcash-cell"><input class="ain addcash" type="number" min="0" step="0.01" data-ac="cash" data-code="'+h.code+'" placeholder="金额" style="width:80px;"><button class="ain-btn" data-hadd="'+h.code+'" title="按现价一键加仓（需先有行情/净值）">加仓</button></div></td>'
         +'<td><button class="danger" data-hdel="'+h.code+'" style="padding:2px 7px;font-size:11px;">删</button></td></tr>';
     });
     html+='<div class="hold-group"><div class="hg-title">'+g.label+'<span class="hg-sub">小计 市值 '+fmt(gmv)+' · 盈亏 <b class="'+cls(gpl)+'">'+fmt(gpl)+'</b> · 当日 <b class="'+cls(gday)+'">'+fmt(gday)+'</b></span></div>'
-      +'<table><thead><tr><th>名称</th><th>数量</th><th>成本</th><th>现价</th><th>市值</th><th>盈亏</th><th>收益率</th><th>当日盈亏</th><th>止盈价</th><th>止损价</th><th>操作</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      +'<table><thead><tr><th>名称</th><th>数量</th><th>成本</th><th>现价</th><th>市值</th><th>盈亏</th><th>收益率</th><th>当日盈亏</th><th>止盈价</th><th>止损价</th><th>加仓(一键)</th><th>操作</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   });
   box.innerHTML=html;
   sum.innerHTML='<div class="stat"><div class="k">总市值</div><div class="v">'+fmt(totMV)+'</div></div>'
@@ -406,6 +407,11 @@ function renderHold(){
     h[f] = (v>0)? v : 0; save();
     if(f==='shares'||f==='cost'){ renderHold(); }   // 数量/成本变了→重算市值盈亏
     else if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind!=='fund') renderDetail(); }
+  }; });
+  box.querySelectorAll('button[data-hadd]').forEach(b=>{ b.onclick=()=>{
+    const code=b.dataset.hadd; const inp=box.querySelector('input[data-ac="cash"][data-code="'+code+'"]');
+    const cash = inp ? parseFloat(inp.value) : 0;
+    addPositionCash(code, cash);
   }; });
 }
 
@@ -548,6 +554,19 @@ async function addHold(raw, shares, cost){
     renderWatch(); renderHold(); renderHoldSelect();
   }catch(e){ alert('识别失败，请重试'); }
   finally{ if(btn){ btn.disabled=false; btn.textContent='加持仓'; } $('holdCode').value=''; $('holdShares').value=''; $('holdCost').value=''; }
+}
+/* 手动加仓：按金额一键加仓（用当前现价/净值计算股数，加权更新成本与数量） */
+function addPositionCash(code, cash){
+  const h=state.hold.find(x=>x.code===code); if(!h){ toast('⚠️ 未找到该持仓'); return; }
+  const isF=isFundKind(h.code);
+  const price=priceOf(h.code);
+  const r=computeAddCash(isF?'fund':'stock', cash, price, h.shares, h.cost);
+  if(!r.ok){ toast('⚠️ '+r.msg); return; }
+  h.shares=r.newShares; h.cost=r.newCost; save();
+  renderHold(); renderHoldSelect();
+  if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind!=='fund') renderDetail(); }
+  const left = r.leftover>0 ? ('，剩 '+r.leftover.toFixed(2)+' 元未用') : '';
+  toast('✓ 加仓成功：现价 '+fmt(r.price, isF?4:2)+' 买入 +'+fmt(r.addShares, isF?2:0)+' 股 → 新持仓 '+fmt(r.newShares, isF?2:0)+' 股，新均价 '+fmt(r.newCost, isF?4:2)+left);
 }
 $('btnAddHold').onclick=()=>{ const code=$('holdCode').value; const sh=parseFloat($('holdShares').value); const co=parseFloat($('holdCost').value); addHold(code, sh, co); };
 $('btnClearHold').onclick=()=>{ if(confirm('清空全部持仓？')){ state.hold=[]; save(); renderHold(); renderWatch(); } };

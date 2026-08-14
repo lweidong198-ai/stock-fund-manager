@@ -110,3 +110,33 @@ function scaleQuotePrices(quote, factor){
   return quote;
 }
 
+/* ============ 持仓：手动加仓（按金额一键加仓）核心计算 ============ */
+/* kind: 'stock' | 'fund'；cash: 本次买入金额（元）；price: 当前价（股票=现价，基金=净值）；
+   oldShares/oldCost: 原持仓数量、原成本价。
+   - 股票/ETF：A股 100 股/手，金额向下取整到整手；不足 1 手则失败。
+   - 基金：支持小数份额（保留 2 位小数）。
+   加权均价 = (旧数量×旧成本 + 本次股数×本次买入价) ÷ (旧数量 + 本次股数)。
+   返回 {ok, msg, addShares, newShares, newCost, used, leftover, price}。纯函数，便于单元测试。 */
+function computeAddCash(kind, cash, price, oldShares, oldCost){
+  const isFund = (kind==='fund');
+  oldShares = Number(oldShares)||0; oldCost = Number(oldCost)||0;
+  cash = Number(cash)||0; price = Number(price)||0;
+  if(!(price>0)) return {ok:false, msg:'暂无可用的现价，无法按现价加仓（请先刷新行情）'};
+  if(!(cash>0))  return {ok:false, msg:'请输入买入金额'};
+  let addShares, leftover=0;
+  if(isFund){
+    addShares = Math.floor(cash/price*100)/100;             // 基金：份额保留 2 位小数
+    if(!(addShares>0)) return {ok:false, msg:'金额不足以买入（至少需 '+(price).toFixed(2)+' 元）'};
+    leftover = cash - addShares*price;
+  } else {
+    const raw = Math.floor(cash/price/100)*100;             // 股票：取整到 100 股/手
+    if(raw<100) return {ok:false, msg:'金额不足以买入 1 手（100股，约需 '+(price*100).toFixed(2)+' 元）'};
+    addShares = raw;
+    leftover = cash - addShares*price;
+  }
+  const newShares = oldShares + addShares;
+  const newCost = newShares>0 ? (oldShares*oldCost + addShares*price)/newShares : price;
+  const used = addShares*price;
+  return {ok:true, addShares, newShares, newCost, used, leftover, price};
+}
+
