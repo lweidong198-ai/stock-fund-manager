@@ -237,6 +237,8 @@ function revSigHTML(rv){
   if(!sl.length) return '';
   return '<div class="op-sigs">'+sl.map(s=>'<span class="op-sig">'+s+'</span>').join('')+'</div>';
 }
+// 已现拐点 悬停白话说明（事件委托到 [data-tip]）
+const REV_TIP='已现拐点 = 这只之前一直在跌，现在出现了开始转强的痕迹。\n不是预测会涨，是“已经发生”的转强事实。\n判定：近期偏弱 + 5个转强信号里≥2个共振（MACD金叉 / 站上5日线且拐头 / 放量 / 突破前10日最高 / 近5日实际转涨）。\n方向：偏多（跌转涨的见底信号），不是看空。\n注意：胜率仅约12%、触发频繁、噪音大，只当观察记号——不喊抄底、不构成买入建议。';
 // 历史回看：逐根判定“反转确认”，返回拐点日期数组（升序），供表内“最近拐点”与K线图标记复用
 function sectorReversalSeries(kl){
   if(!kl||kl.length<60) return [];
@@ -506,7 +508,7 @@ async function renderSectors(){
     const volCell=miss?'<td>—</td>':'<td><span class="vol-tag '+r.vol.cls+'">'+r.vol.label+'</span></td>';
     const b=r._B||{cls:'op-none',label:'—'};
     const rev=r._R||{confirmed:false,label:'',sig:{}};
-    const revTag = miss?'':(rev.confirmed?'<span class="op-rev-tag">↗'+rev.label+'</span>'+revSigHTML(rev):'');
+    const revTag = miss?'':(rev.confirmed?'<span class="op-rev-tag" data-tip="'+REV_TIP+'">↗'+rev.label+'</span>'+revSigHTML(rev):'');
     const lastRev = (!miss && r._revDates && r._revDates.length)? r._revDates[r._revDates.length-1] : '';
     const revDateTag = lastRev? '<div class="rev-date'+(r._revRecent?'':' dim')+'">最近拐点 '+lastRev.slice(5)+(r._revRecent?'':'·超60日')+'</div>' : '';
     const botInner=miss?'—':'<span class="op-tag '+b.cls+'">'+b.label+'</span>'+(b.tier>=1?bottomSigHTML(b):'')+revTag+revDateTag;

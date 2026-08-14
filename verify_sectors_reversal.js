@@ -75,7 +75,7 @@ function rowLabels(body){
   while((m=re.exec(tb))) out.push(m[1]);
   return out;
 }
-function revTags(body){ const re=/op-rev-tag">([^<]*)</g; const out=[]; let m; while((m=re.exec(body))) out.push(m[1]); return out; }
+function revTags(body){ const re=/class="op-rev-tag"[^>]*>([^<]*)</g; const out=[]; let m; while((m=re.exec(body))) out.push(m[1]); return out; }
 function revDates(body){ const re=/rev-date[^>]*>最近拐点 ([^<]*)/g; const out=[]; let m; while((m=re.exec(body))) out.push(m[1]); return out; }
 
 (async()=>{
@@ -120,6 +120,7 @@ function revDates(body){ const re=/rev-date[^>]*>最近拐点 ([^<]*)/g; const o
   assert('A 第11列出现「↗已现拐点」标记', bodyA.includes('已现拐点'));
   const rtA=revTags(bodyA);
   assert('A 存在 op-rev-tag 拐点徽章', rtA.length>=1 && rtA.every(t=>t.indexOf('已现拐点')>=0));
+  assert('A 拐点徽章挂有悬停说明 data-tip', /class="op-rev-tag"[^>]*\sdata-tip="/.test(bodyA));
   const rdA=revDates(bodyA);
   assert('A 存在「最近拐点 MM-DD」日期标注', rdA.length>=1 && /^\d{2}-\d{2}$/.test(rdA[0]));
   try{

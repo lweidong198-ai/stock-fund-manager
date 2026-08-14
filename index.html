@@ -261,7 +261,9 @@
   .op-none{color:#bbb;}
   .op-sigs{margin-top:3px;display:flex;flex-wrap:wrap;gap:3px;}
   .op-sig{display:inline-block;font-size:10px;line-height:1.4;color:#8a7a4c;background:rgba(154,138,92,.12);border-radius:3px;padding:0 4px;white-space:nowrap;}
-  .op-rev-tag{display:inline-block;margin-top:3px;font-size:11px;font-weight:700;color:#d99a00;background:rgba(217,154,0,.16);border-radius:4px;padding:1px 6px;white-space:nowrap;}
+  .op-rev-tag{display:inline-block;margin-top:3px;font-size:11px;font-weight:700;color:#d99a00;background:rgba(217,154,0,.16);border-radius:4px;padding:1px 6px;white-space:nowrap;cursor:help;}
+  #revTip{position:fixed;z-index:9999;max-width:330px;background:#1b2330;color:#e6ebf2;font-size:12px;line-height:1.65;padding:10px 12px;border-radius:8px;box-shadow:0 6px 22px rgba(0,0,0,.38);border:1px solid #3a4250;pointer-events:none;display:none;white-space:normal;}
+  #revTip b{color:#d99a00;}
   .rev-date{margin-top:3px;font-size:11px;color:#6b7280;line-height:1.4;}
   .rev-date.dim{color:#bbb;}
   .rev-mark{position:absolute;}
@@ -1052,5 +1054,32 @@
   <script src="js/app.js"></script>
 <div id="storageWarn">⚠️ 当前浏览器禁用了本地存储（可能是无痕/隐私模式或设置关闭），<b>数据无法自动保存</b>。请改用 Chrome/Edge 正常模式打开，或点「导出备份」手动留存。</div>
 <div id="toast"></div>
+<script>
+(function(){
+  var tip=document.createElement('div'); tip.id='revTip'; document.body.appendChild(tip);
+  function esc(s){return s.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+  var cur=null;
+  document.addEventListener('mouseover',function(e){
+    var el=e.target.closest?e.target.closest('[data-tip]'):null;
+    if(!el){return;}
+    var txt=el.getAttribute('data-tip')||'';
+    if(!txt){tip.style.display='none';cur=null;return;}
+    tip.innerHTML=esc(txt).split('\n').join('<br>');
+    tip.style.display='block';
+    var r=el.getBoundingClientRect();
+    var tw=tip.offsetWidth, th=tip.offsetHeight;
+    var left=r.left+r.width/2-tw/2;
+    left=Math.max(8,Math.min(left, window.innerWidth-tw-8));
+    var top=r.top-th-8;
+    if(top<8){ top=r.bottom+8; }
+    tip.style.left=left+'px'; tip.style.top=top+'px';
+    cur=el;
+  });
+  document.addEventListener('mouseout',function(e){
+    var to=e.relatedTarget;
+    if(cur && (!to || !cur.contains(to))){ tip.style.display='none'; cur=null; }
+  });
+})();
+</script>
 </body>
 </html>
