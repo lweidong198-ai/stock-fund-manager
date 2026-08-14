@@ -106,6 +106,8 @@ function rowLabels(body){
   const opTagsA=(bodyA.match(/op-tag/g)||[]).length;
   const labelsA=rowLabels(bodyA);
   assert('A 新列出现真实标签(强底部信号/形态观察)，非全“—”', labelsA.length>=1 && labelsA.some(l=>l==='强底部信号'||l==='形态观察'));
+  assert('A 灰档/强底档列内显示“具体亮了哪些信号”子标签(op-sig)', bodyA.includes('op-sig'));
+  assert('A 子标签含具体信号名(如RSI超卖/布林下轨/MACD转强)', /RSI超卖|布林下轨|MACD转强|跌速放缓|超跌乖离|波动收缩/.test(bodyA));
 
   // B) 上涨趋势 K线（无回调）→ 新列应全“—”
   emSeries=genKlUp(70);
@@ -115,6 +117,7 @@ function rowLabels(body){
   assert('B 上行行情新列无“强底部信号”', !labelsB.includes('强底部信号'));
   assert('B 上行行情新列无“形态观察”(无回调不标底)', !labelsB.includes('形态观察'));
   assert('B 新列显示“—”(全行 op-none)', labelsB.length>0 && labelsB.every(l=>l==='—'));
+  assert('B 上行行情不显示任何信号子标签(无回调)', !bodyB.includes('op-sig'));
 
   console.log('\n'+(fails===0 ? '✅ 行业雷达·短期底部入场机会 新列验证通过（单元 + 集成双场景）' : ('❌ 有 '+fails+' 项失败')));
   process.exit(fails===0?0:1);

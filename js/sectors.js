@@ -196,6 +196,14 @@ function sectorBottom(c, ind){
   else { tier = score>=2?2:(score>=1?1:0); cls='op-none'; label = score>=1?'形态观察':'—'; }
   return {tier,label,cls,sig};
 }
+// 底部信号→中文标签（用于列内展示“具体亮了哪些信号”，纯描述现状、不喊抄底）
+const BOTTOM_SIG_LABELS={rsiLow:'RSI超卖',bbLow:'布林下轨',macdTurn:'MACD转强',decel:'跌速放缓',biasLow:'超跌乖离',volC:'波动收缩'};
+function bottomSigHTML(b){
+  if(!b||!b.sig) return '';
+  const sl=Object.keys(BOTTOM_SIG_LABELS).filter(k=>b.sig[k]).map(k=>BOTTOM_SIG_LABELS[k]);
+  if(!sl.length) return '';
+  return '<div class="op-sigs">'+sl.map(s=>'<span class="op-sig">'+s+'</span>').join('')+'</div>';
+}
 // 量价配合：近5日均量 vs 60日均量，结合涨跌方向判断量是助攻还是虚涨
 function sectorVolume(kl, c20){
   if(!kl||kl.length<25) return {cls:'vol-flat', label:'量能平稳'};
@@ -325,7 +333,7 @@ function exportSectorText(){
 function exportSectorImage(){
   const box=$('sectorsBody'); if(!box||!box.querySelector('table.sectors')){ alert('请先扫描'); return; }
   const rowsData=[];
-  box.querySelectorAll('tr[data-code]').forEach(tr=>{ const td=tr.querySelectorAll('td'); const g=i=>(td[i]?td[i].textContent.replace(/\s+/g,' ').trim():''); rowsData.push([g(1),g(2),g(3),g(4),g(5),g(6),g(7),g(8),g(9),g(10)]); });
+  box.querySelectorAll('tr[data-code]').forEach(tr=>{ const td=tr.querySelectorAll('td'); const g=i=>(td[i]?td[i].textContent.replace(/\s+/g,' ').trim():''); const bt=td[10]; const bl=bt?(bt.querySelector('.op-tag')?bt.querySelector('.op-tag').textContent.trim():bt.textContent.replace(/\s+/g,' ').trim()):''; rowsData.push([g(1),g(2),g(3),g(4),g(5),g(6),g(7),g(8),g(9),bl]); });
   const head=['行业','代表ETF','当日%','20日%','60日%','趋势','技术面状态','技术强弱分','量能','短期底部入场机会'];
   const cw=[86,104,62,62,62,76,96,76,76,112], ch=26, pad=10;
   const W=pad*2+cw.reduce((a,b)=>a+b,0), H=pad*2+ch*(rowsData.length+1);
@@ -436,7 +444,8 @@ async function renderSectors(){
     const scoreTxt=F.score==null?'—':F.score;
     const volCell=miss?'<td>—</td>':'<td><span class="vol-tag '+r.vol.cls+'">'+r.vol.label+'</span></td>';
     const b=r._B||{cls:'op-none',label:'—'};
-    const botCell=miss?'<td>—</td>':'<td><span class="op-tag '+b.cls+'">'+b.label+'</span></td>';
+    const botInner=miss?'—':'<span class="op-tag '+b.cls+'">'+b.label+'</span>'+(b.tier>=1?bottomSigHTML(b):'');
+    const botCell='<td>'+botInner+'</td>';
     return '<tr data-code="'+r.code+'"'+(miss?' class="row-miss"':'')+'>'
       +'<td><span class="rank">'+(i+1)+'</span></td>'
       +'<td><span class="star '+(watchSet.has(r.code)?'on':'')+'" data-code="'+r.code+'">★</span>'+r.name+(r._badge?' <span class="regime-badge '+regime+'">'+r._badge+'</span>':'')+'</td><td>'+r.etf+' <span class="cd" style="font-size:11px;color:var(--sub);">'+r.code+'</span></td>'
