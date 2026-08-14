@@ -75,5 +75,42 @@ const h3=S.hold[0];
 assert('金额不足时数量不变(仍1000)', h3.shares===1000);
 assert('金额不足时 toast 给出失败提示', /不足|⚠/.test(window.__toast||''));
 
-console.log(fails? ('\n❌ '+fails+' 项失败') : '\n✅ 全部通过 (集成·真实点击链路)');
+// ============ 减仓（减仓按钮真实点击） ============
+// 股票持仓1000股@10，现价12，减仓输入1200元 → 卖100股、余900、成本不变、实现盈亏200
+S.hold=[{code:'sh600519',kind:'stock',shares:1000,cost:10}];
+S.quotes={'sh600519':{price:12,changePct:1.5,name:'测试股'}};
+window.renderHold();
+const rbtn=window.document.querySelector('button[data-hred="sh600519"]');
+const rinp=window.document.querySelector('input[data-rc="cash"][data-code="sh600519"]');
+assert('渲染出减仓按钮', !!rbtn);
+assert('渲染出卖出金额输入框', !!rinp);
+rinp.value='1200'; rbtn.click();
+const hr=S.hold[0];
+assert('减仓后数量 1000→900', hr.shares===900);
+assert('减仓后成本价不变(=10)', Math.abs(hr.cost-10)<1e-9);
+assert('减仓 toast 提示成功', /减仓成功/.test(window.__toast||''));
+
+// 减仓卖超拦截：持仓100股，填100000 → 失败、数量不变
+S.hold=[{code:'sh600519',kind:'stock',shares:100,cost:10}];
+S.quotes={'sh600519':{price:12,changePct:1.5,name:'测试股'}};
+window.renderHold();
+const rbtn2=window.document.querySelector('button[data-hred="sh600519"]');
+const rinp2=window.document.querySelector('input[data-rc="cash"][data-code="sh600519"]');
+rinp2.value='100000'; rbtn2.click();
+const hr2=S.hold[0];
+assert('减仓卖超时数量不变(仍100)', hr2.shares===100);
+assert('减仓卖超 toast 提示失败', /超过持仓|⚠/.test(window.__toast||''));
+
+// 减仓清仓：持仓100股@10，现价12，减仓1200元 → 余0、成本0
+S.hold=[{code:'sh600519',kind:'stock',shares:100,cost:10}];
+S.quotes={'sh600519':{price:12,changePct:1.5,name:'测试股'}};
+window.renderHold();
+const rbtn3=window.document.querySelector('button[data-hred="sh600519"]');
+const rinp3=window.document.querySelector('input[data-rc="cash"][data-code="sh600519"]');
+rinp3.value='1200'; rbtn3.click();
+const hr3=S.hold[0];
+assert('减仓清仓后数量=0', hr3.shares===0);
+assert('减仓清仓后成本=0', hr3.cost===0);
+
+console.log(fails? ('\n❌ '+fails+' 项失败') : '\n✅ 全部通过 (集成·真实点击链路：加仓/减仓/边界)');
 process.exit(fails?1:0);

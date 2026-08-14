@@ -139,4 +139,32 @@ function computeAddCash(kind, cash, price, oldShares, oldCost){
   const used = addShares*price;
   return {ok:true, addShares, newShares, newCost, used, leftover, price};
 }
+/* 手动减仓：按卖出金额一键算股数并减仓（与 computeAddCash 对称）。
+   ⚠️ 减仓不改变剩余持仓的成本价（会计准则：卖出只锁定已实现盈亏，不摊薄/抬高剩余成本）。
+   股票：取整到 100 股/手；基金：份额保留 2 位小数。
+   卖出金额对应股数 > 持仓 → 拦截（避免卖超/误操作）。
+   刚好卖光 → 数量归 0、成本价归 0（已无持仓）。
+   返回 {ok, msg, sellShares, newShares, newCost, realizedPnl, used, price}。纯函数便于测。 */
+function computeReduceCash(kind, cash, price, oldShares, oldCost){
+  const isFund = (kind==='fund');
+  oldShares = Number(oldShares)||0; oldCost = Number(oldCost)||0;
+  cash = Number(cash)||0; price = Number(price)||0;
+  if(!(price>0)) return {ok:false, msg:'暂无可用的现价，无法按现价减仓（请先刷新行情）'};
+  if(!(cash>0))  return {ok:false, msg:'请输入卖出金额'};
+  if(oldShares<=0) return {ok:false, msg:'该持仓数量为 0，无法减仓'};
+  let sellShares;
+  if(isFund){
+    sellShares = Math.floor(cash/price*100)/100;
+    if(!(sellShares>0)) return {ok:false, msg:'金额不足以卖出（至少需 '+(price).toFixed(2)+' 元）'};
+  } else {
+    sellShares = Math.floor(cash/price/100)*100;
+    if(sellShares<100) return {ok:false, msg:'金额不足以卖出 1 手（100股，约需 '+(price*100).toFixed(2)+' 元）'};
+  }
+  if(sellShares > oldShares) return {ok:false, msg:'卖出金额超过持仓（最多可卖 '+(isFund?oldShares.toFixed(2):oldShares)+' '+(isFund?'份':'股')+'，约 '+(oldShares*price).toFixed(2)+' 元）'};
+  const newShares = oldShares - sellShares;
+  const newCost = newShares>0 ? oldCost : 0;                 // 减仓不改变剩余持仓成本价
+  const realizedPnl = (price - oldCost) * sellShares;       // 本次已实现盈亏
+  const used = sellShares*price;
+  return {ok:true, sellShares, newShares, newCost, realizedPnl, used, price};
+}
 
