@@ -193,9 +193,7 @@ function sectorBottom(c, ind){
   if(ind.vol && ind.vol.ann!=null && ind.vol.ann>55) score=Math.min(score,1);     // 高波动下行途中“底”极不可靠 → 封顶关注
   let tier,cls,label;
   if(score>=3){ tier=3; cls='op-strong'; label='强底部信号'; }
-  else if(score>=2){ tier=2; cls='op-mid'; label='底部迹象'; }
-  else if(score>=1){ tier=1; cls='op-weak'; label='关注'; }
-  else { tier=0; cls='op-none'; label='—'; }
+  else { tier = score>=2?2:(score>=1?1:0); cls='op-none'; label = score>=1?'形态观察':'—'; }
   return {tier,label,cls,sig};
 }
 // 量价配合：近5日均量 vs 60日均量，结合涨跌方向判断量是助攻还是虚涨
@@ -419,7 +417,7 @@ async function renderSectors(){
       else r._badge='';
     }
   } else { for(const r of rows) r._badge=''; }
-  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th><th title="描述性指标：基于RSI超卖/布林下轨/MACD转强/跌速放缓/超跌/波动收缩等技术形态共振，判断当前是否呈现短期底部特征；不预测未来涨跌，仅辅助观察，不构成任何买入建议">短期底部入场机会</th></tr></thead>';
+  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th><th title="描述性技术形态判断（RSI超卖/布林下轨/MACD转强/跌速放缓/超跌/波动收缩共振）。仅当≥3个信号共振标记为「强底部信号」——历史回测显示其之后20日有微弱超额(~+1%、胜率约54%，统计显著)，本质为跌多短期均值回归。其余仅标「形态观察」，不构成可靠底部判断，更不构成买入建议。">短期底部入场机会</th></tr></thead>';
   const watchSet=new Set(loadSectorWatch());
   const body=rows.map((r,i)=>{
     const miss=r.klMiss;
@@ -451,7 +449,7 @@ async function renderSectors(){
   }).join('');
   $('sectorsBanner').innerHTML=demoWarn+regimeBanner;
   box.innerHTML='<table class="sectors">'+head+'<tbody>'+body+'</tbody></table>'
-    +'<div class="sectors-note">「短期底部入场机会」为<b>描述性</b>技术形态判断（RSI超卖 / 布林下轨 / MACD转强 / 跌速放缓 等信号共振），<b>不预测未来涨跌</b>，仅辅助观察；高波动下行途中的“底”极不可靠，已自动降级。不构成任何买入建议。</div>';
+    +'<div class="sectors-note">「短期底部入场机会」为<b>描述性</b>技术形态判断（RSI超卖 / 布林下轨 / MACD转强 / 跌速放缓 等信号共振），<b>不预测未来涨跌</b>。仅「<b>强底部信号</b>」(≥3个信号共振)经真实数据回测有微弱超额（之后20日约+1%、胜率约54%，统计显著），属跌多短期均值回归；其余仅标「形态观察」，<b>不构成可靠底部判断，更不构成买入建议</b>。高波动下行途中的“底”极不可靠，已自动降级。</div>';
   const rev=detectReversal(rows);
   const al=$('sectorAlert');
   if(al){

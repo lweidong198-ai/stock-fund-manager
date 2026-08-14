@@ -44,7 +44,7 @@ window.loadKlineP=function(){ return Promise.resolve(null); };   // 强制走东
 
 // K线生成器
 function genKlUp(n){ let c=1.0; const s=Date.parse('2026-01-01'); const a=[]; for(let i=0;i<n;i++){ const o=c; c=c*1.004; const d=new Date(s+i*864e5).toISOString().slice(0,10); a.push(d+','+o.toFixed(3)+','+c.toFixed(3)+','+(c*1.02).toFixed(3)+','+(o*0.98).toFixed(3)+',1000000'); } return a; }
-function genKlBottom(n){ let c=2.0; const s=Date.parse('2026-01-01'); const a=[]; const ph=i=> i<45?0.985 : (i<65?0.995:1.02); for(let i=0;i<n;i++){ const o=c; c=o*ph(i); const hi=Math.max(o,c)*1.01, lo=Math.min(o,c)*0.99; const d=new Date(s+i*864e5).toISOString().slice(0,10); a.push(d+','+o.toFixed(3)+','+c.toFixed(3)+','+hi.toFixed(3)+','+lo.toFixed(3)+',1000000'); } return a; }
+function genKlBottom(n){ let c=2.0; const s=Date.parse('2026-01-01'); const a=[]; const ph=i=> i<50?0.975 : 1.008; for(let i=0;i<n;i++){ const o=c; c=o*ph(i); const hi=Math.max(o,c)*1.01, lo=Math.min(o,c)*0.99; const d=new Date(s+i*864e5).toISOString().slice(0,10); a.push(d+','+o.toFixed(3)+','+c.toFixed(3)+','+hi.toFixed(3)+','+lo.toFixed(3)+',1000000'); } return a; }
 
 let emSeries=genKlUp(70);
 window.fetch=function(url){
@@ -55,6 +55,13 @@ window.fetch=function(url){
 
 let fails=0;
 function assert(name,cond){ if(!cond){ console.error('FAIL: '+name); fails++; } else { console.log('PASS: '+name); } }
+// 仅取 tbody 内 op-tag 徽章的文字（排除表头 <th title> 里的提示文案，避免误匹配）
+function rowLabels(body){
+  const tb=body.split('<tbody>')[1]||body;
+  const re=/<span class="op-tag[^"]*">([^<]*)<\/span>/g; const out=[]; let m;
+  while((m=re.exec(tb))) out.push(m[1]);
+  return out;
+}
 
 (async()=>{
   if(typeof window.sectorBottom!=='function'){ console.error('FAIL: sectorBottom 未定义'); process.exit(1); }
@@ -77,10 +84,15 @@ function assert(name,cond){ if(!cond){ console.error('FAIL: '+name); fails++; } 
   // 缺数据 → “—”
   assert('缺 ind → “—”', window.sectorBottom(cAll,null).label==='—');
 
-  // 温和回调但仅1信号 → 关注(tier=1)
+  // 温和回调但仅1信号 → 形态观察(tier=1, 灰标不误导)
   const ind1={rsi:50, macd:{state:'bear'}, bb:{pos:0.5}, bias:1, vol:{ann:20,regime:'steady'}};
   const r1=window.sectorBottom({c5:-3, c20:-8, c60:-12}, ind1);
-  assert('单一止跌信号 → 关注(tier=1)', r1.tier===1 && r1.label==='关注');
+  assert('单一止跌信号 → 形态观察(tier=1, op-none 灰标)', r1.tier===1 && r1.label==='形态观察' && r1.cls==='op-none');
+
+  // 2信号 → 形态观察(tier=2, 灰标不误导)：rsi不超卖(0)+布林下轨(1)+跌速放缓(1)=2
+  const ind2={rsi:50, macd:{state:'bear'}, bb:{pos:0.15}, bias:1, vol:{ann:20,regime:'steady'}};
+  const r2=window.sectorBottom({c5:-2, c20:-9, c60:-15}, ind2);
+  assert('两信号 → 形态观察(tier=2, op-none 灰标, 不标底部)', r2.tier===2 && r2.label==='形态观察' && r2.cls==='op-none');
 
   // ---------- 集成：renderSectors 新列渲染 ----------
   if(typeof window.renderSectors!=='function'){ console.error('FAIL: renderSectors 未定义'); process.exit(1); }
@@ -92,15 +104,17 @@ function assert(name,cond){ if(!cond){ console.error('FAIL: '+name); fails++; } 
   assert('A 表头含「短期底部入场机会」', bodyA.includes('短期底部入场机会'));
   assert('A 表下含描述性免责说明(sectors-note)', bodyA.includes('sectors-note') && bodyA.includes('不预测未来涨跌'));
   const opTagsA=(bodyA.match(/op-tag/g)||[]).length;
-  const realBottomA=/op-strong|op-mid|op-weak/.test(bodyA);
-  assert('A 新列出现真实底部标签(op-strong/mid/weak) 且不为空', opTagsA>=1 && realBottomA);
+  const labelsA=rowLabels(bodyA);
+  assert('A 新列出现真实标签(强底部信号/形态观察)，非全“—”', labelsA.length>=1 && labelsA.some(l=>l==='强底部信号'||l==='形态观察'));
 
   // B) 上涨趋势 K线（无回调）→ 新列应全“—”
   emSeries=genKlUp(70);
   await window.renderSectors();
   const bodyB=window.document.getElementById('sectorsBody').innerHTML;
-  assert('B 上行行情新列无“强底部信号”', !bodyB.includes('强底部信号'));
-  assert('B 新列显示“—”(op-none 存在)', bodyB.includes('op-none'));
+  const labelsB=rowLabels(bodyB);
+  assert('B 上行行情新列无“强底部信号”', !labelsB.includes('强底部信号'));
+  assert('B 上行行情新列无“形态观察”(无回调不标底)', !labelsB.includes('形态观察'));
+  assert('B 新列显示“—”(全行 op-none)', labelsB.length>0 && labelsB.every(l=>l==='—'));
 
   console.log('\n'+(fails===0 ? '✅ 行业雷达·短期底部入场机会 新列验证通过（单元 + 集成双场景）' : ('❌ 有 '+fails+' 项失败')));
   process.exit(fails===0?0:1);
