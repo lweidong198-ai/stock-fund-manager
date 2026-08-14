@@ -1,0 +1,168 @@
+/* 阶段1：纯量价多因子，探索「上涨拐点」命中率上限（walk-forward 无前视）
+ * 目标：boss 要 80% 命中率。本脚本先用纯历史量价探真实上限，诚实报告。
+ * 方法：
+ *   A) 分层法——对每交易日算"综合超卖分"(多因子分位合成)，取头部 top k%，看命中率
+ *   B) 递进 AND 组合——从"近期偏弱"逐步加严条件，看命中率/样本量变化
+ * 命中定义：信号后 N 日收盘价 > 信号日收盘价 即"上涨成功"（剔除单日|ret|>25%的拆分脏数据）
+ * 持有期 N = [20,40,60,120]
+ * 数据源：新浪日K线(沙箱可达)，未复权；剔除明显拆分/除权日防虚高。
+ */
+const fs=require('fs'), path=require('path');
+const ROOT='C:/Users/Mloong/stock-fund-manager';
+const CACHE=path.join(ROOT,'.cache_reversal'); fs.mkdirSync(CACHE,{recursive:true});
+const POOL=[
+  ['159992','医药/医疗'],['512690','白酒/消费'],['515030','新能源车'],['515790','光伏'],
+  ['512760','芯片/半导体'],['512660','军工'],['512800','银行'],['512880','证券'],
+  ['512400','有色金属'],['515210','钢铁'],['515220','煤炭'],['159870','化工'],
+  ['512200','房地产'],['516110','汽车'],['159996','家电'],['159825','农业'],
+  ['512980','传媒'],['515880','通信'],['159998','计算机'],['159611','电力'],
+  ['159745','建材'],['516780','稀土'],['159755','电池'],['515980','人工智能'],
+  ['512070','保险'],['515050','5G通信'],['562500','机器人'],['159869','游戏'],
+  ['562510','旅游'],['159865','养殖'],['518880','黄金'],['159861','环保'],
+  ['513360','教育'],['159647','中药'],['516670','风电'],['159736','食品饮料'],
+  ['561790','石油'],['516510','云计算'],['159667','工业母机'],['159892','医美']
+];
+async function fetchKL(code){
+  const f=path.join(CACHE, code+'.json');
+  if(fs.existsSync(f)) return JSON.parse(fs.readFileSync(f,'utf8'));
+  const sh = code[0]==='6' || code[0]==='5';
+  const url='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+(sh?'sh':'sz')+code+'&scale=240&ma=5&datalen=1300';
+  for(let attempt=0;attempt<8;attempt++){
+    try{
+      const ctrl=new AbortController(); const to=setTimeout(()=>{try{ctrl.abort();}catch(_){}}, 9000);
+      const r=await fetch(url,{signal:ctrl.signal,headers:{'User-Agent':'Mozilla/5.0','Referer':'https://finance.sina.com.cn/'}});
+      clearTimeout(to);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const d=await r.json(); if(!Array.isArray(d)||!d.length) throw new Error('empty');
+      const kl=d.map(x=>({date:x.day,open:+x.open,close:+x.close,high:+x.high,low:+x.low,volume:+x.volume}));
+      fs.writeFileSync(f, JSON.stringify(kl));
+      return kl;
+    }catch(e){ if(attempt<7) await new Promise(r=>setTimeout(r,600*(attempt+1))); else console.warn('拉取失败',code,e.message); }
+  }
+  return null;
+}
+function sma(arr,i,w){ if(i<w-1) return null; let s=0; for(let k=i-w+1;k<=i;k++) s+=arr[k]; return s/w; }
+function emaArr(arr,n){ const k=2/(n+1); const out=[]; let prev=arr[0]; out[0]=prev; for(let i=1;i<arr.length;i++){ prev=arr[i]*k+prev*(1-k); out[i]=prev; } return out; }
+function rsiArr(arr,n){ const out=[]; for(let i=0;i<arr.length;i++){ if(i<n){out.push(50);continue;} let g=0,l=0; for(let k=i-n+1;k<=i;k++){ const d=arr[k]-arr[k-1]; if(d>=0)g+=d; else l-=d; } const rs=g+l>0?g/l:0; out.push(100-100/(1+rs)); } return out; }
+function macdArr(arr){ const e12=emaArr(arr,12), e26=emaArr(arr,26); const macd=arr.map((_,i)=>e12[i]-e26[i]); const sig=emaArr(macd,9); const hist=macd.map((m,i)=>m-sig[i]); return {macd,sig,hist}; }
+function quantile(sorted,q){ if(!sorted.length) return 0; const pos=(sorted.length-1)*q, lo=Math.floor(pos), hi=Math.ceil(pos); return lo===hi?sorted[lo]:sorted[lo]+(sorted[hi]-sorted[lo])*(pos-lo); }
+function pctRank(arr,x){ // 返回 x 在 arr 中的分位(0=最小)
+  if(arr.length===0) return 0.5;
+  let lo=0,hi=0; for(const v of arr){ if(v<x) lo++; else if(v<=x) hi++; }
+  return (lo + hi/2)/arr.length;
+}
+
+async function main(){
+  console.log('加载 '+POOL.length+' 只行业ETF日K线(新浪, 含缓存)...');
+  const kls={};
+  for(const [code,name] of POOL){ const kl=await fetchKL(code); if(kl&&kl.length>250){ kls[code]={name,kl}; } await new Promise(r=>setTimeout(r,120)); }
+  const codes=Object.keys(kls);
+  console.log('成功 '+codes.length+' 只, 区间 '+kls[codes[0]].kl[0].date+' ~ '+kls[codes[0]].kl[kls[codes[0]].kl.length-1].date);
+
+  // ---- 计算每标的总因子快照（仅"近期偏弱"日）----
+  const rows=[]; // {code,name,date,i, rsi,volr,fracPct,divAmt,dev,c20,c60,vol20, mom, close, ret:{} }
+  // 全样本因子数组（用于跨标的分位排名）
+  const allC20=[], allC60=[], allRsi=[], allVolr=[], allFrac=[], allDev=[], allVol20=[], allMom=[];
+  for(const code of codes){
+    const {name,kl}=kls[code]; const L=kl.length;
+    const close=kl.map(x=>x.close), vol=kl.map(x=>x.volume);
+    const rsi=rsiArr(close,14), {hist}=macdArr(close);
+    const snaps=new Array(L);
+    for(let i=0;i<L;i++){
+      const ma20=sma(close,i,20), ma60=sma(close,i,60);
+      const c20 = (ma20!=null&&i>=21)?(close[i]/ma20-1)*100:null;
+      const c60 = (ma60!=null&&i>=61)?(close[i]/ma60-1)*100:null;
+      const v20=sma(vol,i,20);
+      const volr = (v20&&v20>0)? vol[i]/v20 : null;
+      const win=close.slice(Math.max(0,i-249),i+1);
+      const fracPct = win.length>=2 ? pctRank(win, close[i]) : null; // 近250日分位(越低越便宜)
+      let m=-1; for(let j=Math.max(0,i-30);j<=i-1;j++){ if(m<0||close[j]<close[m]) m=j; }
+      const divAmt = (m>=0 && close[i]<=close[m]) ? (hist[i]-hist[m]) : 0; // >0 即底背离
+      const dev = (ma20!=null)? (close[i]/ma20-1)*100 : null;
+      // 20日波动率(日收益std,%)
+      let vr=[]; for(let k=i-19;k<=i;k++){ if(k>0) vr.push((close[k]/close[k-1]-1)*100); }
+      const vol20 = vr.length>=5 ? Math.sqrt(vr.reduce((s,x)=>s+x*x,0)/vr.length) : null;
+      const mom = (i>=20)? (close[i]/close[i-20]-1)*100 : null;
+      const snap={i,rsi:rsi[i],volr,fracPct,divAmt,dev,c20,c60,vol20,mom,close:close[i]};
+      snaps[i]=snap;
+      if(c20!=null) allC20.push(c20);
+      if(c60!=null) allC60.push(c60);
+      if(rsi[i]!=null) allRsi.push(rsi[i]);
+      if(volr!=null) allVolr.push(volr);
+      if(fracPct!=null) allFrac.push(fracPct);
+      if(dev!=null) allDev.push(dev);
+      if(vol20!=null) allVol20.push(vol20);
+      if(mom!=null) allMom.push(mom);
+    }
+    for(let i=120;i<L;i++){
+      const s=snaps[i]; if(s==null) continue;
+      if(!(s.c20!=null && s.c60!=null && (s.c20<=0||s.c60<=0))) continue; // 前置偏弱
+      const row=Object.assign({code,name,date:kl[i].date}, s);
+      // 计算各持有期 ret（剔除拆分脏日：信号日到目标日之间任意日 |ret|>25% 视为脏，整条剔除）
+      const ret={};
+      for(const N of [20,40,60,120]){
+        const t=i+N; if(t>=L) { ret[N]=null; continue; }
+        let dirty=false;
+        for(let k=i+1;k<=t;k++){ const d=(close[k]/close[k-1]-1); if(Math.abs(d)>0.25){ dirty=true; break; } }
+        ret[N]= dirty ? null : (close[t]/close[i]-1)*100;
+      }
+      row.ret=ret;
+      rows.push(row);
+    }
+  }
+  const nTotal=rows.length;
+  console.log('弱市信号日候选(剔除后有效) n='+nTotal);
+
+  // 综合超卖分：每个因子分位越低(越超卖)得分越高
+  function scoreOf(r){
+    let s=0;
+    s += (1-pctRank(allRsi, r.rsi));            // RSI低
+    s += (1-pctRank(allVolr, r.volr));          // 量比低
+    s += (1-pctRank(allFrac, r.fracPct));       // 估值分位低(便宜)
+    s += (r.divAmt>0?1:0);                      // 底背离存在
+    s += (1-pctRank(allDev, r.dev));            // 乖离低(破位深)
+    s += (1-pctRank(allC20, r.c20));            // 20日跌幅深
+    s += (1-pctRank(allC60, r.c60));            // 60日跌幅深
+    s += (1-pctRank(allVol20, r.vol20));        // 波动率缩(恐慌释放)
+    s += (1-pctRank(allMom, r.mom));            // 动量低(跌得多)
+    return s; // 0~9
+  }
+  rows.forEach(r=> r.score=scoreOf(r));
+
+  function hitRate(list, N){
+    const valid=list.filter(r=>r.ret[N]!=null);
+    if(!valid.length) return {n:0, hit:0, mean:0};
+    const up=valid.filter(r=>r.ret[N]>0).length;
+    const mean=valid.reduce((s,r)=>s+r.ret[N],0)/valid.length;
+    return {n:valid.length, hit:up/valid.length*100, mean};
+  }
+
+  console.log('\n========== A) 分层法：按综合超卖分取头部，命中率随持有期 ==========');
+  const sorted=[...rows].sort((a,b)=>b.score-a.score);
+  for(const k of [0.05,0.10,0.20,0.50]){
+    const top=sorted.slice(0, Math.floor(sorted.length*k));
+    console.log('\n--- top '+(k*100)+'% 超卖 (n='+top.length+') ---');
+    for(const N of [20,40,60,120]){ const h=hitRate(top,N); console.log('  N='+N+'日  上涨命中率='+h.hit.toFixed(1)+'%  n='+h.n+'  平均收益='+(h.mean>=0?'+':'')+h.mean.toFixed(2)+'%'); }
+  }
+
+  console.log('\n========== B) 递进 AND 组合（N=60日，看条件加严后命中率/样本）==========');
+  const combos=[
+    {name:'① 近期偏弱(基线)', f:r=>true},
+    {name:'② +早底(score≥2)', f:r=>r.score>=2},
+    {name:'③ +RSI<20', f:r=>r.score>=2 && r.rsi<20},
+    {name:'④ +估值分位<10%', f:r=>r.score>=2 && r.rsi<20 && r.fracPct<0.10},
+    {name:'⑤ +底背离', f:r=>r.score>=2 && r.rsi<20 && r.fracPct<0.10 && r.divAmt>0},
+    {name:'⑥ +乖离dev<-10%', f:r=>r.score>=2 && r.rsi<20 && r.fracPct<0.10 && r.divAmt>0 && r.dev<-10},
+    {name:'⑦ +量比<0.6', f:r=>r.score>=2 && r.rsi<20 && r.fracPct<0.10 && r.divAmt>0 && r.dev<-10 && r.volr<0.6},
+  ];
+  for(const c of combos){ const h=hitRate(rows.filter(c.f),60); console.log('  '+c.name.padEnd(22)+'  N=60命中率='+h.hit.toFixed(1)+'%  n='+h.n+'  平均='+(h.mean>=0?'+':'')+h.mean.toFixed(2)+'%'); }
+
+  console.log('\n========== B2) AND 组合在更长持有期 N=120 ==========');
+  for(const c of combos){ const h=hitRate(rows.filter(c.f),120); console.log('  '+c.name.padEnd(22)+'  N=120命中率='+h.hit.toFixed(1)+'%  n='+h.n); }
+
+  // Top 案例（最超卖且后续涨的）
+  console.log('\n========== 最强信号后实际表现 Top10(按score) N=60 ==========');
+  const top10=sorted.slice(0,10);
+  top10.forEach(r=>{ const rh=r.ret[60]; console.log('  '+r.code+' '+r.name+' '+r.date+' score='+r.score.toFixed(1)+' rsi='+r.rsi.toFixed(0)+' frac='+(r.fracPct*100).toFixed(0)+'% div='+(r.divAmt>0?'Y':'N')+' N60='+(rh==null?'脏':(rh>=0?'+':'')+rh.toFixed(1)+'%')); });
+}
+main().catch(e=>{ console.error(e); process.exit(1); });
