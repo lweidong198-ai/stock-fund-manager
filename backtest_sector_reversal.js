@@ -54,8 +54,8 @@ async function main(){
   console.log('成功 '+codes.length+' 只，样本区间 '+kls[codes[0]].kl[0].date+' ~ '+kls[codes[0]].kl[kls[codes[0]].kl.length-1].date);
 
   const Ns=[5,10,20,60];
-  const rev={n:0,fwd:{},pos:{},ss:{}}, all={n:0,fwd:{},pos:{},ss:{}};
-  for(const N of Ns){ for(const o of [rev,all]){ o.fwd[N]=0; o.pos[N]=0; o.ss[N]=0; } }
+  const rev={n:0,fwd:{},pos:{},ss:{},cnt:{}}, all={n:0,fwd:{},pos:{},ss:{},cnt:{}};
+  for(const N of Ns){ for(const o of [rev,all]){ o.fwd[N]=0; o.pos[N]=0; o.ss[N]=0; o.cnt[N]=0; } }
   let totalDays=0;
 
   for(const [code,o] of Object.entries(kls)){
@@ -66,18 +66,18 @@ async function main(){
       for(const N of Ns){
         const ft=kl[t+N]; if(!ft) continue;
         const ret=(ft.close/kl[t].close-1)*100;
-        all.n++; all.fwd[N]+=ret; all.pos[N]+=(ret>0?1:0); all.ss[N]+=ret*ret;
-        if(idxSet.has(t)){ rev.n++; rev.fwd[N]+=ret; rev.pos[N]+=(ret>0?1:0); rev.ss[N]+=ret*ret; }
+        all.n++; all.cnt[N]++; all.fwd[N]+=ret; all.pos[N]+=(ret>0?1:0); all.ss[N]+=ret*ret;
+        if(idxSet.has(t)){ rev.n++; rev.cnt[N]++; rev.fwd[N]+=ret; rev.pos[N]+=(ret>0?1:0); rev.ss[N]+=ret*ret; }
       }
       totalDays++;
     }
   }
 
   function report(N){
-    const mR=rev.n?rev.fwd[N]/rev.n:null, hR=rev.n?rev.pos[N]/rev.n*100:null;
-    const mB=all.fwd[N]/all.n, hB=all.pos[N]/all.n*100;
+    const mR=rev.fwd[N]/rev.cnt[N], hR=rev.pos[N]/rev.cnt[N]*100;
+    const mB=all.fwd[N]/all.cnt[N], hB=all.pos[N]/all.cnt[N]*100;
     let tstat=0;
-    if(rev.n>20){ const vR=rev.ss[N]/rev.n-mR*mR, vB=all.ss[N]/all.n-mB*mB; const se=Math.sqrt(vR/rev.n+vB/all.n); tstat=se>0?(mR-mB)/se:0; }
+    if(rev.cnt[N]>20){ const vR=rev.ss[N]/rev.cnt[N]-mR*mR, vB=all.ss[N]/all.cnt[N]-mB*mB; const se=Math.sqrt(vR/rev.cnt[N]+vB/all.cnt[N]); tstat=se>0?(mR-mB)/se:0; }
     console.log('\n===== 拐点确认后 '+N+' 日 =====');
     console.log('拐点确认样本: n='+rev.n+'  均值='+(mR>=0?'+':'')+mR.toFixed(2)+'%  胜率='+hR.toFixed(1)+'%');
     console.log('全样本基准:   n='+all.n+'  均值='+(mB>=0?'+':'')+mB.toFixed(2)+'%  胜率='+hB.toFixed(1)+'%');
