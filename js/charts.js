@@ -68,14 +68,14 @@ function drawMain(kl){
       const vy=Yv(k.vol); ctx.fillStyle=up?'rgba(224,31,34,0.55)':'rgba(15,157,88,0.55)';
       ctx.fillRect(x-bw/2, vy, bw, h-vy);
     }
-    // 历史底部拐点标记（金色圆点+上指三角）：仅当当前选中标的在行业扫描中被标记过拐点
+    // 历史底部拐点标记（金色圆点+下指三角）：仅当当前选中标的在行业扫描中被标记过拐点
     try{
       const revSet=(state.revMarks && state.selected && state.revMarks[state.selected])||null;
       if(revSet && revSet.length){
         for(let i=0;i<n;i++){
           if(revSet.indexOf(sub[i].date)>=0){
             const x=X(i), y=Y(sub[i].high);
-            ctx.fillStyle='#0a7d3c'; ctx.beginPath(); ctx.arc(x, y-7, 3.2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle='#d99a00'; ctx.beginPath(); ctx.arc(x, y-7, 3.2, 0, Math.PI*2); ctx.fill();
             ctx.beginPath(); ctx.moveTo(x,y-7); ctx.lineTo(x-3.4,y-2.5); ctx.lineTo(x+3.4,y-2.5); ctx.closePath(); ctx.fill();
           }
         }
