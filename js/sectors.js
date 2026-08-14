@@ -241,7 +241,46 @@ function revSigHTML(rv){
 const REV_TIP='已现拐点 = 这只之前一直在跌，现在出现了开始转强的痕迹。\n不是预测会涨，是“已经发生”的转强事实。\n判定：近期偏弱 + 5个转强信号里≥2个共振（MACD金叉 / 站上5日线且拐头 / 放量 / 突破前10日最高 / 近5日实际转涨）。\n方向：偏多（跌转涨的见底信号），不是看空。\n注意：信号后60日上涨概率约45%~49%（接近随机，不算高）；价值不在“必胜”，而在“平均有正收益（约+1%/20日、t显著）且比右侧确认更提前”——少数大跌后的强反弹撑起正均值。只当左侧观察记号，不喊抄底、不构成买入建议。';
 // 极低估·长持机会 悬停白话说明（事件委托到 [data-tip]）
 const DV_TIP='极低估·长持机会 = 这只行业ETF跌到了“历史最便宜一档”+周线超卖+单周暴跌，是“已跌透”的极端便宜信号。\n判定(周线)：估值分位<5%(处于历史最低5%) + 周RSI<22 + 单周跌幅>3%，且近期偏弱。\n历史回测(40只行业ETF, 2022-2026 walk-forward)：信号出现后买入并持有250日(约一年)，绝对上涨概率约81%(n≈52)，平均收益约+17%。\n代价(必读)：①必须拿得住一年——持有60~180日命中率仅55~67%，到一年才跳回80%+；②跑赢大盘仅约40%(涨是随市场beta，非超额alpha)；③信号极稀有(全市场全周期约52次)。\n本质=“极端恐惧时贪婪”的价值式信号，不是技术拐点预测。仅作极端价值观察，不喊抄底、不构成买入建议。';
-// 历史回看：逐根判定“反转确认”，返回拐点日期数组（升序），供表内“最近拐点”与K线图标记复用
+
+// ============ 行情「当前状态」七态状态机（全覆盖，无信号也显示中性状态） ============
+// 需求：每天看信号；底部细分为「短期底/回弹(已现拐点)/下跌回弹(诱多)」；无底部信号也告知当前状态。
+// 七态优先级：极低估长持 > 已现拐点(右侧转强) > 短期底部 > 强上升/震荡/下跌反弹/下跌中
+const ST_TIPS={
+  bull:    '强上升趋势 = 中线(60日)和短线(20日)都在涨，不是底部、是已经在涨。\n仓位参考：趋势向上以持有为主；若短期超买(20日涨幅>25%)注意分批止盈。\n仅供参考，不构成买入建议。',
+  flat:    '震荡 = 中期和短期涨跌幅都很小，方向不明，不是底也不是顶。\n仓位参考：轻仓观望、不追涨杀跌。\n仅供参考，不构成买入建议。',
+  down:    '下跌中 = 中线和短线都在跌、趋势向下、未见止跌，底还没出现。\n仓位参考：不抄底、控仓位，等止跌信号(短期底部/已现拐点)。\n仅供参考，不构成买入建议。',
+  downrebound: '下跌反弹(诱多) = 短线反弹但中线仍在跌，即你说的“下跌回弹”。最坑的一种：看着像底，其实只是下跌中途的反弹，后面常再破位。\n仓位参考：别追高、别当底抄，等右侧确认(已现拐点)再动。\n仅供参考，不构成买入建议。',
+  shortbottom: '短期底部 = 跌多后技术形态出现底部特征(≥3个底部信号共振：RSI超卖/布林下轨/MACD转强/跌速放缓/超跌乖离/波动收缩)，可能见底但没确认。\n仓位参考：可小仓位观察分批，绝不是抄底指令。历史回测其后20日有微弱超额(~+1%、胜率~54%)，本质跌多均值回归。\n仅供参考，不构成买入建议。',
+  reversal: '已现拐点·转强 = 与“下跌回弹”正相反：跌势结束、开始转强已被右侧确认(≥2个转强信号共振)。这是真回弹，不是诱多。\n仓位参考：可关注、可小仓跟随，非买入指令。\n仅供参考，不构成买入建议。',
+  deepvalue: '极低估·长持 = 跌到历史最便宜一档(估值分位<5%)+周线超卖+单周暴跌，是“已跌透”的极端便宜信号。\n历史回测持有250日绝对上涨约81%(n≈52)，但：①必须拿约一年；②跑赢大盘仅40%；③信号极稀有。\n仓位参考：长持视角可考虑分批，不喊抄底。\n仅供参考，不构成买入建议。',
+  miss:    '行情接口连不上，无法判断状态。'
+};
+const ST_LEAN={
+  bull:'持有为主·超买减仓', flat:'轻仓观望', down:'不抄底·控仓', downrebound:'别追高·等确认',
+  shortbottom:'可观察分批·非抄底', reversal:'可关注跟随·非指令', deepvalue:'长持视角分批·不喊抄底', miss:'—'
+};
+function ST(state,label){ return {state,label,tip:ST_TIPS[state]||'',lean:ST_LEAN[state]||''}; }
+function statusOf(r){
+  if(r.klMiss) return ST('miss','连不上');
+  if(r._dv && r._dv.triggered) return ST('deepvalue','极低估·长持');
+  if(r._R && r._R.confirmed) return ST('reversal','已现拐点·转强');
+  if(r._B && r._B.tier>=3) return ST('shortbottom','短期底部');
+  const L=sectorLight(r);
+  if(L.cls==='s-up') return ST('bull','强上升趋势');
+  if(L.cls==='s-flat') return ST('flat','震荡');
+  if(L.cls==='s-rebound') return ST('downrebound','下跌反弹·诱多');
+  return ST('down','下跌中');
+}
+function buildStatusOverview(rows){
+  const order=['deepvalue','reversal','shortbottom','bull','flat','downrebound','down'];
+  const labelMap={deepvalue:'极低估·长持',reversal:'已现拐点·转强',shortbottom:'短期底部',bull:'强上升',flat:'震荡',downrebound:'下跌反弹·诱多',down:'下跌中'};
+  const g={}; order.forEach(k=>g[k]=[]);
+  for(const r of rows){ if(r.klMiss||!r._st||!g[r._st.state]) continue; g[r._st.state].push(r.name); }
+  let h='<div class="status-overview"><span class="so-title">全市场状态总览：</span>';
+  for(const k of order){ const arr=g[k]; h+='<span class="so-group st-'+k+'"><b>'+labelMap[k]+'</b> '+arr.length+(arr.length?'：'+arr.join('、'):'')+'</span>'; }
+  return h+'</div>';
+}
+// 历史回看：逐根判定"反转确认"，返回拐点日期数组（升序），供表内"最近拐点"与K线图标记复用
 function sectorReversalSeries(kl){
   if(!kl||kl.length<60) return [];
   const closes=kl.map(x=>x.close); const n=closes.length;
@@ -482,6 +521,7 @@ async function renderSectors(){
       r._dv=sectorDeepValue(r._kl);
     }
     else { r._R={confirmed:false,tier:0,label:'',cls:'op-none',sig:{}}; r._revDates=[]; r._revRecent=false; r._dv=null; }
+    r._st = statusOf(r);
   });
   // 连不上清单（用于醒目横幅，绝不显示假数据）
   const demoFails = rows.filter(r=>r.klMiss).map(r=>r.name);
@@ -517,7 +557,7 @@ async function renderSectors(){
       else r._badge='';
     }
   } else { for(const r of rows) r._badge=''; }
-  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th><th title="描述性技术形态判断（RSI超卖/布林下轨/MACD转强/跌速放缓/超跌/波动收缩共振）。仅当≥3个信号共振标记为「强底部信号」——历史回测显示其之后20日有微弱超额(~+1%、胜率约54%，统计显著)，本质为跌多短期均值回归。其余仅标「形态观察」，不构成可靠底部判断，更不构成买入建议。本列另含「↗已现拐点」：≥2个转强信号共振(MACD金叉/站上5日线/放量确认/突破前高/跌速转升)即标记，描述跌势结束开始转强，不预测未来；并附「最近拐点」日期(近60日首次转强时点)。">短期底部入场机会</th></tr></thead>';
+  const head='<thead><tr><th>#</th><th>行业</th><th>代表ETF</th><th>当日%</th><th>20日%</th><th>60日%</th><th>趋势</th><th>技术面状态</th><th>技术强弱分</th><th>量能</th><th title="描述性技术形态判断（RSI超卖/布林下轨/MACD转强/跌速放缓/超跌/波动收缩共振）。仅当≥3个信号共振标记为「强底部信号」——历史回测显示其之后20日有微弱超额(~+1%、胜率约54%，统计显著)，本质为跌多短期均值回归。其余仅标「形态观察」，不构成可靠底部判断，更不构成买入建议。本列另含「↗已现拐点」：≥2个转强信号共振(MACD金叉/站上5日线/放量确认/突破前高/跌速转升)即标记，描述跌势结束开始转强，不预测未来；并附「最近拐点」日期(近60日首次转强时点)。" title="行情当前状态七态全覆盖，无信号也显示中性状态：极低估·长持(长持一年约81%上涨) / 已现拐点·转强(右侧真回弹) / 短期底部(≥3信号共振) / 强上升 / 震荡 / 下跌中 / 下跌反弹·诱多(下跌回弹,警惕再破位)。每态悬停含参考仓位倾向，仅供参考、不构成买入建议。">行情状态 / 底部信号</th></tr></thead>'
   const watchSet=new Set(loadSectorWatch());
   const body=rows.map((r,i)=>{
     const miss=r.klMiss;
@@ -537,11 +577,13 @@ async function renderSectors(){
     const volCell=miss?'<td>—</td>':'<td><span class="vol-tag '+r.vol.cls+'">'+r.vol.label+'</span></td>';
     const b=r._B||{cls:'op-none',label:'—'};
     const rev=r._R||{confirmed:false,label:'',sig:{}};
-    const revTag = miss?'':(rev.confirmed?'<span class="op-rev-tag" data-tip="'+REV_TIP+'">↗'+rev.label+'</span>'+revSigHTML(rev):'');
-    const dvTag = (!miss && r._dv && r._dv.triggered)? '<span class="op-dv-tag" data-tip="'+DV_TIP+'">↙极低估·长持</span>' : '';
+    const st=r._st||{state:'',label:'—',tip:'',lean:''};
+    const stTag = miss?'':('<span class="op-state st-'+st.state+'" data-tip="'+st.tip+'">'+st.label+'</span>'+(st.lean?'<div class="op-lean">'+st.lean+'</div>':''));
+    const revTag = (miss || (st.state==='reversal'))?'':(rev.confirmed?'<span class="op-rev-tag" data-tip="'+REV_TIP+'">↗'+rev.label+'</span>'+revSigHTML(rev):'');
+    const dvTag = (miss || (st.state==='deepvalue') || !(r._dv && r._dv.triggered))? '' : '<span class="op-dv-tag" data-tip="'+DV_TIP+'">↙极低估·长持</span>';
     const lastRev = (!miss && r._revDates && r._revDates.length)? r._revDates[r._revDates.length-1] : '';
     const revDateTag = lastRev? '<div class="rev-date'+(r._revRecent?'':' dim')+'">最近拐点 '+lastRev.slice(5)+(r._revRecent?'':'·超60日')+'</div>' : '';
-    const botInner=miss?'—':'<span class="op-tag '+b.cls+'">'+b.label+'</span>'+(b.tier>=1?bottomSigHTML(b):'')+revTag+dvTag+revDateTag;
+    const botInner=miss?'—': stTag + revTag + dvTag + (b.tier>=1?bottomSigHTML(b):'') + revDateTag;
     const botCell='<td>'+botInner+'</td>';
     return '<tr data-code="'+r.code+'"'+(miss?' class="row-miss"':'')+'>'
       +'<td><span class="rank">'+(i+1)+'</span></td>'
@@ -553,9 +595,14 @@ async function renderSectors(){
       +'<td class="'+F.cls+'">'+confDot+F.label+(F.phase?' <span class="phase">'+F.phase+'</span>':'')+'</td>'
       +'<td class="prob-cell conf-'+(F.conf||'')+'" style="color:'+sc+';">'+scoreTxt+'</td>'+volCell+botCell+'</tr>';
   }).join('');
-  $('sectorsBanner').innerHTML=demoWarn+regimeBanner;
+  $('sectorsBanner').innerHTML=demoWarn+regimeBanner+buildStatusOverview(rows);
   box.innerHTML='<table class="sectors">'+head+'<tbody>'+body+'</tbody></table>'
-    +'<div class="sectors-note">「短期底部入场机会」为<b>描述性</b>技术形态判断（RSI超卖 / 布林下轨 / MACD转强 / 跌速放缓 等信号共振），<b>不预测未来涨跌</b>。仅「<b>强底部信号</b>」(≥3个信号共振)经真实数据回测有微弱超额（之后20日约+1%、胜率约54%，统计显著），属跌多短期均值回归；其余仅标「形态观察」，<b>不构成可靠底部判断，更不构成买入建议</b>。高波动下行途中的“底”极不可靠，已自动降级。<br>「↗已现拐点」为<b>描述性</b>“跌势结束、开始转强”信号（MACD金叉 / 站上5日线 / 放量确认 / 突破前高 / 跌速转升 中≥2个共振），<b>不预测未来涨跌</b>；只陈述“当前已出现转强迹象”，不构成买入建议。下方「最近拐点」为近60日首次转强时点，供回看信号历史表现。</div>';
+    +'<div class="sectors-note">本列是<b>行情「当前状态」七态全覆盖</b>——无论有无底部信号，每只行业ETF都给一个清晰状态，帮你每天快速判断、据状态调仓：'
+    +'<br>· <b style="color:#e2553b">极低估·长持</b>：跌到历史最便宜一档+周线超卖+暴跌，长持一年(250日)绝对上涨约81%(n≈52)，但跑赢大盘仅40%、需拿得住、信号极稀有'
+    +'· <b style="color:#d99a00">已现拐点·转强</b>：右侧确认跌势结束开始涨=真回弹(非诱多)；<b style="color:#d99a00">短期底部</b>：≥3个底部信号共振、可能见底未确认'
+    +'· <b style="color:#e23b3b">强上升</b> / <b style="color:#999">震荡</b> / <b style="color:#1aa260">下跌中</b>：趋势方向'
+    +'· <b style="color:#e08a00">下跌反弹·诱多</b>：短线弹但中线仍跌="下跌回弹"，最坑，警惕再破位、别当底抄'
+    +'<br>每态悬停含<b>参考仓位倾向</b>（如"持有为主/轻仓观望/不抄底控仓/别追高等确认"），<b>仅供参考、不构成买入建议</b>，最终决策由你拍板。底部类信号均经真实数据回测验证、仅描述形态不预测未来。</div>';
   const rev=detectReversal(rows);
   const al=$('sectorAlert');
   if(al){

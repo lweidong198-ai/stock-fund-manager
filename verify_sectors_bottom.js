@@ -43,13 +43,13 @@ try{ window.eval(_combined); }catch(e){ console.error('FAIL: eval combined ->',e
 window.loadKlineP=function(){ return Promise.resolve(null); };   // 强制走东财兜底
 
 // K线生成器
-function genKlUp(n){ let c=1.0; const s=Date.parse('2026-01-01'); const a=[]; for(let i=0;i<n;i++){ const o=c; c=c*1.004; const d=new Date(s+i*864e5).toISOString().slice(0,10); a.push(d+','+o.toFixed(3)+','+c.toFixed(3)+','+(c*1.02).toFixed(3)+','+(o*0.98).toFixed(3)+',1000000'); } return a; }
-function genKlBottom(n){ let c=2.0; const s=Date.parse('2026-01-01'); const a=[]; const ph=i=> i<50?0.975 : 1.008; for(let i=0;i<n;i++){ const o=c; c=o*ph(i); const hi=Math.max(o,c)*1.01, lo=Math.min(o,c)*0.99; const d=new Date(s+i*864e5).toISOString().slice(0,10); a.push(d+','+o.toFixed(3)+','+c.toFixed(3)+','+hi.toFixed(3)+','+lo.toFixed(3)+',1000000'); } return a; }
+function genKlUp(n){ let c=1.0; const s=Date.parse('2026-01-01'); const a=[]; for(let i=0;i<n;i++){ const o=c; c=c*1.004; const d=new Date(s+i*864e5).toISOString().slice(0,10); a.push({date:d,open:+o.toFixed(3),close:+c.toFixed(3),high:+(c*1.02).toFixed(3),low:+(o*0.98).toFixed(3),vol:1000000}); } return a; }
+function genKlBottom(n){ let c=2.0; const s=Date.parse('2026-01-01'); const a=[]; const ph=i=> i<50?0.975 : 0.99; for(let i=0;i<n;i++){ const o=c; c=o*ph(i); const hi=Math.max(o,c)*1.01, lo=Math.min(o,c)*0.99; const d=new Date(s+i*864e5).toISOString().slice(0,10); a.push({date:d,open:+o.toFixed(3),close:+c.toFixed(3),high:+hi.toFixed(3),low:+lo.toFixed(3),vol:1000000}); } return a; }
 
 let emSeries=genKlUp(70);
 window.fetch=function(url){
   if(url.indexOf('qt.gtimg.cn')>=0){ return Promise.resolve({ok:true,arrayBuffer:()=>Promise.resolve(Buffer.from('v_sh515050="1~ETF~515050~1.10~1.00~1.12~9930090~4823060~5102900~1.10~947~1.060~156749~1.00~1.05~+5.00%~..."','utf-8'))}); }
-  if(url.indexOf('push2his.eastmoney.com')>=0){ return Promise.resolve({ok:true,json:()=>Promise.resolve({rc:0,data:{klines:emSeries}})}); }
+  if(url.indexOf('push2his.eastmoney.com')>=0){ return Promise.resolve({ok:true,json:()=>Promise.resolve({rc:0,data:{klines:emSeries.map(k=>[k.date,k.open,k.close,k.high,k.low,k.vol].join(','))}})}); }
   return Promise.resolve({ok:false,status:501,json:()=>Promise.resolve({})});
 };
 
@@ -58,7 +58,7 @@ function assert(name,cond){ if(!cond){ console.error('FAIL: '+name); fails++; } 
 // 仅取 tbody 内 op-tag 徽章的文字（排除表头 <th title> 里的提示文案，避免误匹配）
 function rowLabels(body){
   const tb=body.split('<tbody>')[1]||body;
-  const re=/<span class="op-tag[^"]*">([^<]*)<\/span>/g; const out=[]; let m;
+  const re=/<span class="op-state[^"]*"[^>]*>([^<]*)<\/span>/g; const out=[]; let m;
   while((m=re.exec(tb))) out.push(m[1]);
   return out;
 }
@@ -101,22 +101,22 @@ function rowLabels(body){
   emSeries=genKlBottom(70);
   await window.renderSectors();
   const bodyA=window.document.getElementById('sectorsBody').innerHTML;
-  assert('A 表头含「短期底部入场机会」', bodyA.includes('短期底部入场机会'));
-  assert('A 表下含描述性免责说明(sectors-note)', bodyA.includes('sectors-note') && bodyA.includes('不预测未来涨跌'));
-  const opTagsA=(bodyA.match(/op-tag/g)||[]).length;
+  assert('A 表头含「行情状态 / 底部信号」', bodyA.includes('行情状态 / 底部信号'));
+  assert('A 表下含描述性免责说明(sectors-note)', bodyA.includes('sectors-note') && bodyA.includes('不预测未来'));
+  const opTagsA=(bodyA.match(/op-state/g)||[]).length;
   const labelsA=rowLabels(bodyA);
-  assert('A 新列出现真实标签(强底部信号/形态观察)，非全“—”', labelsA.length>=1 && labelsA.some(l=>l==='强底部信号'||l==='形态观察'));
-  assert('A 灰档/强底档列内显示“具体亮了哪些信号”子标签(op-sig)', bodyA.includes('op-sig'));
+  assert('A 新列出现「当前状态」主标签(下跌中/短期底部/下跌反弹等)，非全空', labelsA.length>=1 && labelsA.some(l=>l==='短期底部'||l==='下跌中'||l==='下跌反弹·诱多'));
+  assert('A 列内显示“具体亮了哪些信号”子标签(op-sig)', bodyA.includes('op-sig'));
   assert('A 子标签含具体信号名(如RSI超卖/布林下轨/MACD转强)', /RSI超卖|布林下轨|MACD转强|跌速放缓|超跌乖离|波动收缩/.test(bodyA));
 
-  // B) 上涨趋势 K线（无回调）→ 新列应全“—”
+  // B) 上涨趋势 K线（无回调）→ 新列显示趋势态(强上升/震荡)，不标底部
   emSeries=genKlUp(70);
   await window.renderSectors();
   const bodyB=window.document.getElementById('sectorsBody').innerHTML;
   const labelsB=rowLabels(bodyB);
   assert('B 上行行情新列无“强底部信号”', !labelsB.includes('强底部信号'));
   assert('B 上行行情新列无“形态观察”(无回调不标底)', !labelsB.includes('形态观察'));
-  assert('B 新列显示“—”(全行 op-none)', labelsB.length>0 && labelsB.every(l=>l==='—'));
+  assert('B 上行行情新列显示趋势态主标签(强上升/震荡)', labelsB.length>0 && labelsB.some(l=>l.indexOf('强上升')>=0||l.indexOf('震荡')>=0));
   assert('B 上行行情不显示任何信号子标签(无回调)', !bodyB.includes('op-sig'));
 
   console.log('\n'+(fails===0 ? '✅ 行业雷达·短期底部入场机会 新列验证通过（单元 + 集成双场景）' : ('❌ 有 '+fails+' 项失败')));

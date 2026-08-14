@@ -71,7 +71,7 @@ let fails=0;
 function assert(name,cond){ if(!cond){ console.error('FAIL: '+name); fails++; } else { console.log('PASS: '+name); } }
 function rowLabels(body){
   const tb=body.split('<tbody>')[1]||body;
-  const re=/<span class="op-tag[^"]*">([^<]*)<\/span>/g; const out=[]; let m;
+  const re=/<span class="op-state[^"]*"[^>]*>([^<]*)<\/span>/g; const out=[]; let m;
   while((m=re.exec(tb))) out.push(m[1]);
   return out;
 }
@@ -116,11 +116,12 @@ function revDates(body){ const re=/rev-date[^>]*>最近拐点 ([^<]*)/g; const o
   emSeries=genKlReversal(70);
   await window.renderSectors();
   const bodyA=window.document.getElementById('sectorsBody').innerHTML;
-  assert('A 表头含「短期底部入场机会」', bodyA.includes('短期底部入场机会'));
-  assert('A 第11列出现「↗已现拐点」标记', bodyA.includes('已现拐点'));
-  const rtA=revTags(bodyA);
-  assert('A 存在 op-rev-tag 拐点徽章', rtA.length>=1 && rtA.every(t=>t.indexOf('已现拐点')>=0));
-  assert('A 拐点徽章挂有悬停说明 data-tip', /class="op-rev-tag"[^>]*\sdata-tip="/.test(bodyA));
+  assert('A 表头含「行情状态 / 底部信号」', bodyA.includes('行情状态 / 底部信号'));
+  assert('A 第11列出现「已现拐点」标记(反转态主标签)', bodyA.includes('已现拐点'));
+  // 新设计：reversal 态以 op-state 主标签呈现，不再额外挂 op-rev-tag 子徽章（避免与状态主标签重复）
+  const stRevA=(bodyA.match(/class="op-state st-reversal"[^>]*>([^<]*)</g)||[]);
+  assert('A 存在 op-state st-reversal 反转态主标签', stRevA.length>=1 && stRevA.some(t=>t.indexOf('已现拐点')>=0));
+  assert('A 反转态主标签挂有悬停说明 data-tip', /class="op-state st-reversal"[^>]*\sdata-tip="/.test(bodyA));
   const rdA=revDates(bodyA);
   assert('A 存在「最近拐点 MM-DD」日期标注', rdA.length>=1 && /^\d{2}-\d{2}$/.test(rdA[0]));
   try{
@@ -134,9 +135,9 @@ function revDates(body){ const re=/rev-date[^>]*>最近拐点 ([^<]*)/g; const o
   await window.renderSectors();
   const bodyB=window.document.getElementById('sectorsBody').innerHTML;
   assert('B 持续下跌行情第11列无「已现拐点」徽章(op-rev-tag)', revTags(bodyB).length===0);
-  // 但底部形态可能仍亮（强底部信号/形态观察），不应全“—”
+  // 第11列现在显示「当前状态」主标签（持续下跌→下跌中/短期底部），非空
   const labelsB=rowLabels(bodyB);
-  assert('B 底部形态可亮(强底部信号/形态观察)，非全“—”', labelsB.length>0 && labelsB.some(l=>l==='强底部信号'||l==='形态观察'));
+  assert('B 持续下跌行情第11列有「当前状态」主标签(下跌中/短期底部)', labelsB.length>0 && labelsB.some(l=>l==='下跌中'||l==='短期底部'));
 
   console.log('\n'+(fails===0 ? '✅ 行业雷达·底部反转确认/历史拐点 验证通过（单元 + 集成双场景）' : ('❌ 有 '+fails+' 项失败')));
   process.exit(fails===0?0:1);
