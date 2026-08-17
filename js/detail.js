@@ -253,6 +253,7 @@ function renderWatchOverview(list){
       +'<div class="t-code">'+w.code+(isFund?' · 基':' · 股')+'</div>'
       +'<div class="t-price">'+price+'</div>'
       +'<div class="t-chg">'+cpTxt+'</div>'
+      +'<button class="wl-trend" data-trend="'+w.code+'" title="拉真实行情/K线做走势分析" style="margin-top:4px;">📈 走势分析</button>'
       +'</div>';
   });
   h+='</div>';
@@ -276,6 +277,7 @@ function renderWatch(){
   if((state.watchView||'list')==='overview'){
     box.innerHTML = renderWatchOverview(list);
     box.querySelectorAll('.tile').forEach(t=>t.onclick=()=>selectCode(t.dataset.code));
+    box.querySelectorAll('button[data-trend]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openTrendModal(b.dataset.trend); });
     return;
   }
   let html='<table class="wl-table"><thead><tr><th>名称 / 代码</th><th>现价</th><th>涨跌%</th><th>分类</th></tr></thead><tbody>';
@@ -290,7 +292,7 @@ function renderWatch(){
     const held = !!(hRec && (hRec.shares>0 || hRec.cost>0));   // 仅真实持仓(填了数量/成本)才标"持有中"; 旧版自动建的空占位行(shares=0)不再误显示
     const catOpts = state.watchCats.map(c=>'<option value="'+c.id+'"'+(w.cat===c.id?' selected':'')+'>'+escapeHtml(c.name)+'</option>').join('');
     html+='<tr class="wl-row'+sel+'" data-code="'+code+'">'
-      +'<td class="wl-name">'+escapeHtml(name)+'<span class="wl-code">'+code+'</span><span class="wl-kind">'+(isFund?'基':'股')+'</span>'+(held?'<span class="wl-held">持仓中</span>':'')+'<button class="wl-del" data-del="'+code+'" title="删除">✕</button></td>'
+      +'<td class="wl-name">'+escapeHtml(name)+'<span class="wl-code">'+code+'</span><span class="wl-kind">'+(isFund?'基':'股')+'</span>'+(held?'<span class="wl-held">持仓中</span>':'')+'<button class="wl-trend" data-trend="'+code+'" title="拉真实行情/K线做走势分析">📈走势</button><button class="wl-del" data-del="'+code+'" title="删除">✕</button></td>'
       +'<td class="wl-price">'+price+'</td>'
       +'<td class="wl-chg '+ccls+'">'+cpTxt+'</td>'
       +'<td class="wl-cat-cell"><select class="wl-cat" data-code="'+code+'" title="切换所属分类">'+catOpts+'</select></td>'
@@ -298,8 +300,9 @@ function renderWatch(){
   });
   html+='</tbody></table>';
   box.innerHTML=html;
-  box.querySelectorAll('tr[data-code]').forEach(tr=>tr.onclick=(e)=>{ if(e.target.dataset.del || e.target.closest('.wl-cat')) return; selectCode(tr.dataset.code); });
+  box.querySelectorAll('tr[data-code]').forEach(tr=>tr.onclick=(e)=>{ if(e.target.dataset.del || e.target.dataset.trend || e.target.closest('.wl-cat')) return; selectCode(tr.dataset.code); });
   box.querySelectorAll('button[data-del]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); delWatch(b.dataset.del); });
+  box.querySelectorAll('button[data-trend]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openTrendModal(b.dataset.trend); });
   box.querySelectorAll('select.wl-cat').forEach(s=>s.onchange=()=>{ const w=state.watch.find(x=>x.code===s.dataset.code); if(w){ w.cat=s.value; save(); renderWatch(); } });
 }
 
