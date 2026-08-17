@@ -471,6 +471,7 @@
   .wl-name{font-weight:600;white-space:nowrap;}
   .wl-trend{margin-left:6px;font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid var(--accent);background:rgba(43,125,233,.08);color:var(--accent);cursor:pointer;font-family:inherit;white-space:nowrap;vertical-align:middle;}
   .wl-trend:hover{background:var(--accent);color:#fff;}
+  .detail-head .wl-trend{font-size:12px;padding:2px 9px;margin-left:10px;vertical-align:middle;}
   .wl-code{font-size:10px;color:var(--sub);margin-left:5px;font-weight:400;font-family:inherit;}
   .wl-kind{font-size:9px;padding:0 4px;border-radius:3px;border:1px solid var(--border);color:var(--sub);margin-left:3px;}
   .wl-held{font-size:9px;padding:0 4px;border-radius:3px;background:#fde9d0;color:#b45309;border:1px solid #f3c98b;margin-left:3px;font-weight:600;}
@@ -707,7 +708,7 @@
         <div id="detailEmpty" class="empty">← 在左侧自选里点一个，就能看它的实时走势和各类指标。<br>看不懂下面的指标？往下翻有「白话解释」。</div>
         <div id="detail" style="display:none;">
           <div class="detail-head">
-            <span class="big" id="dName">--</span>
+            <span class="big" id="dName">--</span><button class="wl-trend" id="dTrendBtn" title="拉真实行情/K线做走势分析">📈走势</button>
             <span class="big" id="dPrice">--</span>
             <span id="dChg">--</span>
             <span class="meta" id="dMeta"></span>
@@ -770,7 +771,7 @@
         </div>
         <div id="marketFundDetail" style="display:none;">
           <div class="detail-head">
-            <span class="big" id="mFName">--</span>
+            <span class="big" id="mFName">--</span><button class="wl-trend" id="mFTrendBtn" title="拉真实净值做走势分析">📈走势</button>
             <span class="big" id="mFPrice">--</span>
             <span id="mFChg">--</span>
             <span class="meta" id="mFMeta"></span>

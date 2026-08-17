@@ -21,6 +21,7 @@ function renderDetailHead(){
     else if(q) sub.innerHTML='今开 <b>'+fmt(q.open)+'</b>　昨收 <b>'+fmt(q.prevClose)+'</b>　最高 <b>'+fmt(q.high)+'</b>　最低 <b>'+fmt(q.low)+'</b>';
     else sub.innerHTML='';
   }
+  const tb=$('dTrendBtn'); if(tb){ tb.onclick=(e)=>{ e.stopPropagation(); openTrendModal(code); }; }
   renderQuoteBoard();
 }
 function renderDetail(){
@@ -191,6 +192,7 @@ function showMarketFund(code){
   const mfd=$('marketFundDetail'); if(!mfd) return; mfd.style.display='block';
   $('detailEmpty').style.display='none';
   $('detail').style.display='none';
+  const ftb=$('mFTrendBtn'); if(ftb){ ftb.onclick=(e)=>{ e.stopPropagation(); openTrendModal(code); }; }
   // ① 东方财富数据源在当前环境不可达 → 明确提示，绝不假装演示数据误导
   if(state.fundFail && state.fundFail[code]){
     $('mFName').textContent=code; $('mFPrice').textContent='—'; $('mFChg').textContent='—'; $('mFChg').className='flat';
@@ -249,7 +251,7 @@ function renderWatchOverview(list){
     const sel = w.code===state.selected?' sel':'';
     h+='<div class="tile '+ccls+sel+'" data-code="'+w.code+'">'
       +'<span class="t-bar"></span>'
-      +'<div class="t-name">'+escapeHtml(name)+'<button class="wl-trend" data-trend="'+w.code+'" title="拉真实行情/K线做走势分析">📈走势</button></div>'
+      +'<div class="t-name">'+escapeHtml(name)+'</div>'
       +'<div class="t-code">'+w.code+(isFund?' · 基':' · 股')+'</div>'
       +'<div class="t-price">'+price+'</div>'
       +'<div class="t-chg">'+cpTxt+'</div>'
@@ -291,7 +293,7 @@ function renderWatch(){
     const held = !!(hRec && (hRec.shares>0 || hRec.cost>0));   // 仅真实持仓(填了数量/成本)才标"持有中"; 旧版自动建的空占位行(shares=0)不再误显示
     const catOpts = state.watchCats.map(c=>'<option value="'+c.id+'"'+(w.cat===c.id?' selected':'')+'>'+escapeHtml(c.name)+'</option>').join('');
     html+='<tr class="wl-row'+sel+'" data-code="'+code+'">'
-      +'<td class="wl-name">'+escapeHtml(name)+'<span class="wl-code">'+code+'</span><span class="wl-kind">'+(isFund?'基':'股')+'</span>'+(held?'<span class="wl-held">持仓中</span>':'')+'<button class="wl-trend" data-trend="'+code+'" title="拉真实行情/K线做走势分析">📈走势</button><button class="wl-del" data-del="'+code+'" title="删除">✕</button></td>'
+      +'<td class="wl-name">'+escapeHtml(name)+'<span class="wl-code">'+code+'</span><span class="wl-kind">'+(isFund?'基':'股')+'</span>'+(held?'<span class="wl-held">持仓中</span>':'')+'<button class="wl-del" data-del="'+code+'" title="删除">✕</button></td>'
       +'<td class="wl-price">'+price+'</td>'
       +'<td class="wl-chg '+ccls+'">'+cpTxt+'</td>'
       +'<td class="wl-cat-cell"><select class="wl-cat" data-code="'+code+'" title="切换所属分类">'+catOpts+'</select></td>'
