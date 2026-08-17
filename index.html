@@ -1129,5 +1129,16 @@
   });
 })();
 </script>
+
+<!-- 走势分析弹窗（trend.js → openTrendModal 填充） -->
+<div id="trendModal" class="modal-mask" onclick="if(event.target===this)closeTrendModal()">
+  <div class="modal-panel">
+    <div class="modal-bar">
+      <h3 id="trendModalTitle">走势分析</h3>
+      <button class="x" onclick="closeTrendModal()" title="关闭">✕</button>
+    </div>
+    <div class="modal-body trend-report" id="trendModalBody"></div>
+  </div>
+</div>
 </body>
 </html>

@@ -24,7 +24,8 @@ S.fundData=S.fundData||{}; S.fundFail=S.fundFail||{};
 // 以下为 canvas/DOM 副作用桩：必须在 eval 之后设置，否则被函数声明覆盖
 window.renderQuoteBoard=()=>{};
 window.paintCanvasMsg=()=>{}; window.drawNav=()=>{}; window.chartStat=()=>{};
-// 桩 openTrendModal 为 spy（覆盖 trend.js 原实现，避免真实 fetch）
+// 桩 openTrendModal 为 spy（覆盖 trend.js 原实现，避免真实 fetch）；先存真身供 D 段用
+const _realOpenTrendModal=window.openTrendModal;
 window.openTrendModal=(c)=>{ (window.__otm=window.__otm||[]).push(c); };
 
 let fails=0;
@@ -59,5 +60,25 @@ window.__otm=[];
 ftb.click();
 assert('点击基金走势按钮→openTrendModal(003304)', (window.__otm||[])[0]==='003304');
 
-console.log(fails? ('\n❌ '+fails+' 项失败') : '\n✅ 全部通过 (走势按钮：中栏移除·右侧名称后新增·点击生效)');
-process.exit(fails?1:0);
+// ============ D：弹窗容器真实存在 + 点击真的弹出 ============
+// D1：index.html 必须含 #trendModal / #trendModalBody / #trendModalTitle
+const idxHtml=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+assert('index.html 含 #trendModal 容器', /id="trendModal"/.test(idxHtml));
+assert('index.html 含 #trendModalBody', /id="trendModalBody"/.test(idxHtml));
+assert('index.html 含 #trendModalTitle', /id="trendModalTitle"/.test(idxHtml));
+// D2：本已加载的 DOM 里能拿到这三个元素
+assert('DOM 含 #trendModal', !!window.document.getElementById('trendModal'));
+assert('DOM 含 #trendModalBody', !!window.document.getElementById('trendModalBody'));
+assert('DOM 含 #trendModalTitle', !!window.document.getElementById('trendModalTitle'));
+// D3：用真实 openTrendModal（桩掉 analyzeTrend 防真 fetch），点开后弹窗须有 show 类
+window.analyzeTrend=(c)=>Promise.resolve({name:'测试',html:'<div class="tr-note">ok</div>'});
+const modalEl=window.document.getElementById('trendModal');
+modalEl.classList.remove('show');
+_realOpenTrendModal('sh600519');
+// openTrendModal 内部是异步填充，但 class 立即 add；给一拍让 Promise 解析
+setTimeout(()=>{
+  assert('点击后弹窗获得 .show（真实 openTrendModal）', modalEl.classList.contains('show'));
+  assert('弹窗内容被填充', (window.document.getElementById('trendModalBody').innerHTML||'').indexOf('ok')>=0);
+  console.log(fails? ('\n❌ '+fails+' 项失败') : '\n✅ 全部通过 (走势按钮：中栏移除·右侧名称后新增·点击弹出弹窗)');
+  process.exit(fails?1:0);
+}, 30);
