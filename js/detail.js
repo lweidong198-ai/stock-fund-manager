@@ -249,11 +249,10 @@ function renderWatchOverview(list){
     const sel = w.code===state.selected?' sel':'';
     h+='<div class="tile '+ccls+sel+'" data-code="'+w.code+'">'
       +'<span class="t-bar"></span>'
-      +'<div class="t-name">'+escapeHtml(name)+'</div>'
+      +'<div class="t-name">'+escapeHtml(name)+'<button class="wl-trend" data-trend="'+w.code+'" title="拉真实行情/K线做走势分析">📈走势</button></div>'
       +'<div class="t-code">'+w.code+(isFund?' · 基':' · 股')+'</div>'
       +'<div class="t-price">'+price+'</div>'
       +'<div class="t-chg">'+cpTxt+'</div>'
-      +'<button class="wl-trend" data-trend="'+w.code+'" title="拉真实行情/K线做走势分析" style="margin-top:4px;">📈 走势分析</button>'
       +'</div>';
   });
   h+='</div>';
