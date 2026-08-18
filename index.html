@@ -309,6 +309,45 @@
   .pan-table .pan-miss{opacity:.55;}
   .pan-table .op-lean{font-size:10px;color:var(--sub);margin-top:2px;}
   .pan-pend{color:var(--sub);}
+  /* ---- 行业全景作战图 ---- */
+  #homePanorama{max-height:none;}
+  .pan-global{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;}
+  .gb-item{display:flex;flex-direction:column;min-width:78px;}
+  .gb-item b{font-size:18px;line-height:1.1;color:var(--text);}
+  .gb-item b i{font-size:11px;color:var(--sub);font-style:normal;}
+  .gb-item span{font-size:11px;color:var(--sub);margin-top:2px;}
+  .gb-concl{flex:1 1 240px;justify-content:center;font-size:12px;color:var(--text);line-height:1.5;min-width:200px;}
+  .pan-section{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--card);}
+  .pan-sec-h{font-size:12.5px;font-weight:600;color:var(--sub);margin-bottom:8px;}
+  .pan-sub-note{font-size:11.5px;color:var(--sub);line-height:1.6;padding:6px 0;}
+  /* 热力图 */
+  .heat-grid{display:flex;flex-wrap:wrap;gap:5px;}
+  .heat-cell{width:92px;height:54px;border-radius:7px;padding:6px 7px;color:#fff;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(0,0,0,.12);overflow:hidden;}
+  .heat-cell:hover{outline:2px solid var(--accent);}
+  .hc-name{font-size:11px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 1px rgba(0,0,0,.25);}
+  .hc-pct{font-size:12px;font-weight:700;text-shadow:0 1px 1px rgba(0,0,0,.25);}
+  /* 资金走向 */
+  .fl-col{display:inline-block;vertical-align:top;min-width:200px;margin-right:18px;}
+  .fl-h{font-size:11.5px;font-weight:600;color:var(--sub);margin-bottom:5px;}
+  .fl-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;}
+  .fl-name{width:86px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fl-val{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;}
+  .fl-tag{font-size:10px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;color:var(--sub);}
+  /* 机会清单 */
+  .opp-list{display:flex;flex-direction:column;gap:4px;}
+  .opp-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 7px;border-radius:7px;background:var(--panel2);cursor:pointer;}
+  .opp-row:hover{background:var(--border);}
+  .opp-name{width:92px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .opp-sig{flex:1;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .opp-day{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;}
+  /* 新闻方向 */
+  .nd-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+  .nd-row{display:flex;align-items:center;gap:6px;font-size:12px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:4px 8px;}
+  .nd-name{font-weight:600;}
+  .nd-cnt{color:var(--sub);font-size:11px;}
+  .nd-up{color:#e23b3b;font-size:11px;font-weight:600;}
+  .nd-dn{color:#1aa260;font-size:11px;font-weight:600;}
+  .nd-flat{color:#999;font-size:11px;}
   .op-lean{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.3;}
   .status-overview{margin:6px 0 2px;font-size:12px;line-height:1.95;}
   .status-overview .so-title{color:var(--sub);margin-right:6px;}
@@ -689,9 +728,15 @@
           <div class="home-grid" id="homeMods"></div>
         </div>
         <div class="card">
-          <h2>🌐 行业全景 <span class="tag">全行业信息聚合</span> <button id="btnRefreshPanorama" class="mini-btn" onclick="if(typeof renderIndustryPanorama==='function')renderIndustryPanorama()">🔄 刷新</button><span id="homePanoramaTime" class="uptime"></span></h2>
+          <h2>🌐 行业全景 <span class="tag">全行业作战图</span> <button id="btnRefreshPanorama" class="mini-btn" onclick="if(typeof renderIndustryPanorama==='function')renderIndustryPanorama()">🔄 刷新</button><span id="homePanoramaTime" class="uptime"></span></h2>
           <div id="homePanoramaWarn"></div>
-          <div id="homePanoramaBody"></div>
+          <div id="homePanorama">
+            <div id="panGlobal" class="pan-global"></div>
+            <div class="pan-section"><div class="pan-sec-h">① 行业热力图 · 整体全图（色块=今日涨跌，红涨绿跌，点击进详情）</div><div id="panHeat"></div></div>
+            <div class="pan-section"><div class="pan-sec-h">② 资金走向 · 近5日主力净流入与板块轮动</div><div id="panFund"></div></div>
+            <div class="pan-section"><div class="pan-sec-h">③ 涨跌机会清单 · 按七态强度排序</div><div id="panOpps"></div></div>
+            <div class="pan-section"><div class="pan-sec-h">④ 新闻方向 · 公开新闻标题关键词匹配（仅供参考，不构成建议）</div><div id="panNews"></div></div>
+          </div>
           <div class="pan-note">七态状态 / 冷热分位(3年) / 主力资金流 / 涨跌 / 技术强弱 — 全部零Key免费源聚合；连不上诚实标灰，<b>仅供观察、不构成任何买卖建议</b>。</div>
         </div>
       </div>
