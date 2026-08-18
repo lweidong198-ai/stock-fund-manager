@@ -280,6 +280,50 @@ function buildStatusOverview(rows){
   for(const k of order){ const arr=g[k]; h+='<span class="so-group st-'+k+'"><b>'+labelMap[k]+'</b> '+arr.length+(arr.length?'：'+arr.join('、'):'')+'</span>'; }
   return h+'</div>';
 }
+/* ============ 共享：全行业 ETF 七态分析（行业雷达 / 行业全景 共用） ============
+ * 提取自 renderSectors 的分析核心，供「行业全景」面板复用，避免重写且保持一致。
+ * 返回 { rows, bench60, demoWarn, quotes }；rows 每项含 _st(七态) / c5,c20,c60 / _F(强弱分) / klMiss 等。
+ */
+async function computeIndustryRows(POOL){
+  // 当日涨跌：腾讯批量行情（零Key、CORS友好）
+  let quotes={};
+  try{
+    const ctrl=new AbortController(); const to=setTimeout(()=>{ try{ctrl.abort();}catch(_){} }, 8000);
+    const qtCodes=POOL.map(x=>normCode(x.code));
+    const r=await fetch('https://qt.gtimg.cn/q='+qtCodes.join(',')+'&_='+Date.now(), {signal:ctrl.signal});
+    clearTimeout(to);
+    const buf=await r.arrayBuffer(); quotes=parseTencent(new TextDecoder('gb18030').decode(buf));
+  }catch(e){ console.warn('industry quotes failed', e); }
+  // 相对大盘强度基准：沪深300 日K线（腾讯前复权，零Key）
+  let bench60=null;
+  try{
+    let bk=await loadKlineP('sh000300','d');
+    if(!(bk&&bk.length)) bk=await fetchEMKline('1.000300');
+    if(!(bk&&bk.length)) bk=await loadSinaKlineP('sh000300');
+    bench60=bk?klinePct(bk,60):null;
+  }catch(e){ console.warn('bench failed', e); }
+  state._demoCodes=new Set();
+  const rows=await Promise.all(POOL.map(async x=>{
+    let kl=await loadKlineP(x.code,'d');
+    if(!(kl&&kl.length)) kl=await loadEMKline(x.code);
+    if(!(kl&&kl.length)) kl=await loadSinaKlineP(x.code);
+    const q=quotes[normCode(x.code)]||{}; const klMiss=!kl;
+    const c5=klinePct(kl,5), c20=klinePct(kl,20), c60=klinePct(kl,60);
+    const vol=klMiss?{cls:'vol-flat',label:'连不上'}:sectorVolume(kl,c20);
+    return { name:x.name, code:x.code, etf:x.etf, day:(q.changePct==null?null:(q.changePct||0)), c5:c5, c20:c20, c60:c60, vol:vol, ind:computeSectorIndicators(kl), rel60:(c60==null||bench60==null)?null:(c60-bench60), score:null, phase:'', _kl:kl, klMiss:klMiss };
+  }));
+  rows.forEach(r=>{ r._F=sectorForecast(r,r.vol.cls,r.rel60,r.ind); r._B=sectorBottom(r,r.ind);
+    if(!r.klMiss){ r._R=sectorReversal(r,r.ind,r._kl); r._revDates=sectorReversalSeries(r._kl);
+      const li=r._revDates.length?r._kl.findIndex(x=>x.date===r._revDates[r._revDates.length-1]):-1; r._revRecent=(li>=0&&r._kl.length-li<=60); r._dv=sectorDeepValue(r._kl);
+    } else { r._R={confirmed:false,tier:0,label:'',cls:'op-none',sig:{}}; r._revDates=[]; r._revRecent=false; r._dv=null; }
+    r._st=statusOf(r);
+  });
+  const demoFails=rows.filter(r=>r.klMiss).map(r=>r.name);
+  let demoWarn='';
+  if(demoFails.length){ const head=demoFails.slice(0,8).join('、')+(demoFails.length>8?' 等':'');
+    demoWarn='⚠️ 行情接口连不上：'+demoFails.length+' 个行业（'+head+'）无法获取真实K线，已隐藏其假数据，表中标灰为「连不上」。当日% 若正常显示则为真实行情，请勿参考其趋势列。请检查网络后刷新。'; }
+  return { rows, bench60, demoWarn, quotes };
+}
 // 历史回看：逐根判定"反转确认"，返回拐点日期数组（升序），供表内"最近拐点"与K线图标记复用
 function sectorReversalSeries(kl){
   if(!kl||kl.length<60) return [];

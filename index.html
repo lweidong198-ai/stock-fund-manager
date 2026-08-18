@@ -293,6 +293,22 @@
   .tr-note{margin-top:10px;padding:9px 11px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;line-height:1.6;}
   .tr-loading{text-align:center;color:var(--sub);padding:40px 10px;font-size:13px;}
   .cls-up{color:#e23b3b;} .cls-dn{color:#1aa260;} .cls-flat{color:#999;}
+  /* ---- 工作台·行业全景聚合面板 ---- */
+  .mini-btn{font-size:11px;padding:3px 9px;border-radius:6px;background:var(--panel2);border:1px solid var(--border);cursor:pointer;margin-left:8px;color:var(--text);}
+  .mini-btn:hover{background:var(--accent);color:#fff;}
+  .uptime{font-size:11px;color:var(--sub);margin-left:6px;}
+  .pan-note{font-size:11px;color:var(--sub);margin-top:8px;line-height:1.6;}
+  #homePanoramaBody{max-height:480px;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+  .pan-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .pan-table th{text-align:left;color:var(--sub);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);z-index:1;white-space:nowrap;}
+  .pan-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .pan-table tr{cursor:pointer;}
+  .pan-table tr:hover{background:var(--panel2);}
+  .pan-table .pan-name{font-weight:600;}
+  .pan-table .pan-etf{display:block;font-size:10px;color:var(--sub);font-weight:400;margin-top:1px;}
+  .pan-table .pan-miss{opacity:.55;}
+  .pan-table .op-lean{font-size:10px;color:var(--sub);margin-top:2px;}
+  .pan-pend{color:var(--sub);}
   .op-lean{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.3;}
   .status-overview{margin:6px 0 2px;font-size:12px;line-height:1.95;}
   .status-overview .so-title{color:var(--sub);margin-right:6px;}
@@ -671,6 +687,12 @@
         <div class="card">
           <h2>🚀 快捷入口 <span class="tag">点卡片进入</span></h2>
           <div class="home-grid" id="homeMods"></div>
+        </div>
+        <div class="card">
+          <h2>🌐 行业全景 <span class="tag">全行业信息聚合</span> <button id="btnRefreshPanorama" class="mini-btn" onclick="if(typeof renderIndustryPanorama==='function')renderIndustryPanorama()">🔄 刷新</button><span id="homePanoramaTime" class="uptime"></span></h2>
+          <div id="homePanoramaWarn"></div>
+          <div id="homePanoramaBody"></div>
+          <div class="pan-note">七态状态 / 冷热分位(3年) / 主力资金流 / 涨跌 / 技术强弱 — 全部零Key免费源聚合；连不上诚实标灰，<b>仅供观察、不构成任何买卖建议</b>。</div>
         </div>
       </div>
 
@@ -1096,6 +1118,7 @@
   <script src="js/sectors.js"></script>
   <script src="js/opportunity.js"></script>
   <script src="js/detail.js"></script>
+  <script src="js/industry-panorama.js"></script>
   <script src="js/datacenter.js"></script>
   <script src="js/rebalance.js"></script>
   <script src="js/fundanalysis.js"></script>

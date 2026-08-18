@@ -177,6 +177,8 @@ function renderHome(){
   const mods=[{v:'market',i:'📊',t:'行情看板',d:'K线+五档盘口+各类指标'},{v:'hold',i:'💼',t:'持仓管理',d:'成本录入·盈亏自动算'},{v:'fund',i:'🔍',t:'机会精选',d:'主动基金·半年维度筛选'},{v:'analysis',i:'🧠',t:'建仓分析',d:'集合大师思维框架研判'},{v:'sectors',i:'🌐',t:'行业趋势扫描',d:'哪个行业在向上'},{v:'fundAnalysis',i:'📈',t:'基金深度分析',d:'净值诊断·风险体检'},{v:'rotation',i:'🌡️',t:'行业温度计',d:'只看冷热·不构成推荐'},{v:'datacenter',i:'🧮',t:'可靠数据中心',d:'质量/估值/分散/定投'}];
   const mg=$('homeMods');
   if(mg){ mg.innerHTML=mods.map(m=>'<div class="modcard" data-go="'+m.v+'"><div class="mi">'+m.i+'</div><div class="mt">'+m.t+'</div><div class="md">'+m.d+'</div></div>').join(''); mg.querySelectorAll('.modcard').forEach(c=>c.onclick=()=>goView(c.dataset.go)); }
+  // 4) 行业全景聚合面板（进入工作台即自动拉取；失败/限流时内部诚实降级）
+  if(typeof renderIndustryPanorama==='function') renderIndustryPanorama();
 }
 
 function refreshQuotes(cb){
