@@ -345,6 +345,26 @@
   .fl-val{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;}
   .fl-tag{font-size:10px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;color:var(--sub);}
   .fl-sum{font-size:12px;font-weight:600;margin:2px 0 8px;}
+  /* 单ETF资金流查询 */
+  .ff-qbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-bottom:7px;}
+  .ff-qsel{flex:1 1 130px;min-width:0;font-size:12px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);}
+  .ff-qinp{flex:1 1 88px;min-width:0;font-size:12px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);}
+  .ff-qdays{display:flex;gap:3px;}
+  .ff-qbtn{font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--sub);cursor:pointer;}
+  .ff-qbtn.on{background:var(--accent,#2f6fed);color:#fff;border-color:var(--accent,#2f6fed);}
+  .ff-qgo{font-size:12px;font-weight:600;padding:3px 11px;border:1px solid var(--accent,#2f6fed);border-radius:6px;background:var(--accent,#2f6fed);color:#fff;cursor:pointer;}
+  .ff-single-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:600;margin-bottom:5px;}
+  .ff-single-h .ff-qback{font-size:11px;font-weight:400;padding:1px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--sub);cursor:pointer;}
+  .ff-bars{display:flex;align-items:flex-end;gap:3px;height:64px;padding:4px 2px;margin:4px 0 2px;border-bottom:1px solid var(--border);overflow-x:auto;}
+  .ff-bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1 0 14px;height:100%;}
+  .ff-bar{width:9px;border-radius:2px 2px 0 0;}
+  .ff-bar.up{background:#e23b3b;}
+  .ff-bar.dn{background:#1aa260;}
+  .ff-bar-date{font-size:9px;color:var(--sub);margin-top:2px;white-space:nowrap;}
+  .ff-list{max-height:168px;overflow-y:auto;margin-top:6px;}
+  .ff-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2px 4px;}
+  .ff-date{color:var(--sub);font-size:11px;}
+  .ff-val{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;}
   /* 机会清单（可换行，说明独占一行，根治文字重叠） */
   .opp-list{display:flex;flex-direction:column;gap:5px;}
   /* 机会清单：Grid 固定结构，根治文字重叠（状态跨两行居左，名称+涨跌幅第一行，说明独占第二行） */
