@@ -81,6 +81,29 @@
     return out;
   }
 
+  // 把带 url 的新闻条目数组映射成「可点击」列表：每条归属首个命中行业，并粗判方向
+  // 输入 items:[{title,url}] → 输出 [{title,url,dir,bull,bear,code,name}]，按相关度排序
+  function matchNewsToItems(items){
+    const out=[];
+    (items||[]).forEach(it=>{
+      const s=String(it.title||''); if(!s) return;
+      const sent=newsSentiment(s);
+      let hitCode=null;
+      for(const code in INDUSTRY_KW){
+        const ks=INDUSTRY_KW[code].keys;
+        let hit=false;
+        for(const k of ks){ if(k && s.indexOf(k)>=0){ hit=true; break; } }
+        if(hit){ hitCode=code; break; }
+      }
+      const dir = sent.bull>sent.bear?'up':(sent.bear>sent.bull?'down':'flat');
+      out.push({ title:s, url:it.url||'', dir, bull:sent.bull, bear:sent.bear,
+                 code:hitCode, name:hitCode?INDUSTRY_KW[hitCode].name:'' });
+    });
+    // 相关度：命中行业 + 情感强 + 有链接 优先
+    out.sort((a,b)=> ((b.code?2:0)+(b.bull-b.bear)+(b.url?1:0)) - ((a.code?2:0)+(a.bull-a.bear)+(a.url?1:0)) );
+    return out.slice(0,18);
+  }
+
   // 裸6位代码 → 东财 secid（toSecid 只认 sh/sz 前缀，行业池是裸码，这里补齐推断，避免资金流永远 nosecid 失败）
   function ffSecid(code){
     if(code.startsWith('sh')) return '1.'+code.slice(2);
@@ -167,9 +190,9 @@
         try{
           const data=json&&json.result&&json.result.data;
           if(!data||!data.length) return cb({err:'empty', label});
-          const titles=data.map(d=>(d&&d.title)||'').filter(Boolean);
-          if(!titles.length) return cb({err:'empty', label});
-          cb({err:null, titles, label});
+          const items=data.map(d=>({title:(d&&d.title)||'', url:(d&&d.url)||''})).filter(x=>x.title);
+          if(!items.length) return cb({err:'empty', label});
+          cb({err:null, titles:items.map(x=>x.title), items, label});
         }catch(e){ cb({err:'parse', label}); }
       },
       function(){ cb({err:'net', label}); }
@@ -187,9 +210,9 @@
         try{
           const list=json&&json.data&&json.data.list;
           if(!list||!list.length) return cb({err:'empty', label});
-          const titles=list.map(d=>(d&&(d.title||d.digest))||'').filter(Boolean);
-          if(!titles.length) return cb({err:'empty', label});
-          cb({err:null, titles, label});
+          const items=list.map(d=>({title:(d&&(d.title||d.digest))||'', url:(d&&d.url)||''})).filter(x=>x.title);
+          if(!items.length) return cb({err:'empty', label});
+          cb({err:null, titles:items.map(x=>x.title), items, label});
         }catch(e){ cb({err:'parse', label}); }
       },
       function(){ cb({err:'net', label}); }
@@ -264,18 +287,27 @@
   function renderFundTrend(rows){
     const el=document.getElementById('panFund'); if(!el) return;
     const known=rows.filter(r=>r._flowDays && !r._flowDays.err && r._flowDays.last!=null);
-    if(!known.length){ el.innerHTML='<div class="pan-sub-note">资金流加载中或暂不可用（东财源连不上时显示此提示，非故障）。</div>'; return; }
-    const sumAll=known.reduce((a,r)=>a+(r._flowDays.sum||0),0);
-    const byToday=known.slice().sort((a,b)=>b._flowDays.last-a._flowDays.last);
-    const topIn=byToday.slice(0,6), topOut=byToday.slice(-6).reverse();
-    const cont=known.filter(r=>r._flowDays.cont>=2).sort((a,b)=>b._flowDays.cont-a._flowDays.cont).slice(0,6);
-    const row=(r,tag)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r._flowDays.last>=0?'cls-up':'cls-dn')+'">'+fmtMoney(r._flowDays.last)+'</span>'+(tag?'<span class="fl-tag">'+tag+'</span>':'')+'</div>';
-    let h='<div class="fl-sum '+(sumAll>=0?'cls-up':'cls-dn')+'">全行业近5日主力净流入合计：'+(sumAll>=0?'+':'')+fmtMoney(sumAll)+'</div>';
-    h+='<div class="fl-grid">'
-      +'<div class="fl-col"><div class="fl-h">今日资金净流入 Top6</div>'+topIn.map(r=>row(r)).join('')+'</div>'
-      +'<div class="fl-col"><div class="fl-h">今日资金净流出 Top6</div>'+topOut.map(r=>row(r)).join('')+'</div>';
-    if(cont.length) h+='<div class="fl-col"><div class="fl-h">资金连续净流入·持续看好</div>'+cont.map(r=>row(r,'连'+r._flowDays.cont+'日')).join('')+'</div>';
-    h+='</div><div class="pan-sub-note">数据：东方财富主力资金净流入（超大单+大单），仅供参考、不构成建议。</div>';
+    const rot=rows.filter(r=>r.day!=null).slice().sort((a,b)=>b.day-a.day);
+    const lead=rot.slice(0,5), lag=rot.slice(-5).reverse();
+    const rowRot=(r)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r.day>=0?'cls-up':'cls-dn')+'">'+(r.day>=0?'+':'')+r.day.toFixed(2)+'%</span></div>';
+    let h='';
+    if(known.length){
+      const sumAll=known.reduce((a,r)=>a+(r._flowDays.sum||0),0);
+      const byToday=known.slice().sort((a,b)=>b._flowDays.last-a._flowDays.last);
+      const topIn=byToday.slice(0,6), topOut=byToday.slice(-6).reverse();
+      const cont=known.filter(r=>r._flowDays.cont>=2).sort((a,b)=>b._flowDays.cont-a._flowDays.cont).slice(0,6);
+      const row=(r,tag)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r._flowDays.last>=0?'cls-up':'cls-dn')+'">'+fmtMoney(r._flowDays.last)+'</span>'+(tag?'<span class="fl-tag">'+tag+'</span>':'')+'</div>';
+      h+='<div class="fl-sum '+(sumAll>=0?'cls-up':'cls-dn')+'">近5日主力净流入合计：'+(sumAll>=0?'+':'')+fmtMoney(sumAll)+'</div>';
+      h+='<div class="fl-block"><div class="fl-h">今日主力净流入 Top6</div>'+topIn.map(r=>row(r)).join('')+'</div>';
+      h+='<div class="fl-block"><div class="fl-h">今日主力净流出 Top6</div>'+topOut.map(r=>row(r)).join('')+'</div>';
+      if(cont.length) h+='<div class="fl-block"><div class="fl-h">资金连续净流入·持续看好</div>'+cont.map(r=>row(r,'连'+r._flowDays.cont+'日')).join('')+'</div>';
+    } else {
+      h+='<div class="pan-sub-note">主力净流入（东方财富）暂连不上，下面用「今日涨跌」展示板块轮动。</div>';
+    }
+    // 板块轮动：永远可用（来自今日涨跌 r.day），即使东财源挂了也有信息
+    h+='<div class="fl-block"><div class="fl-h">板块轮动 · 今日领涨</div>'+(lead.length?lead.map(r=>rowRot(r)).join(''):'<div class="pan-sub-note">暂无</div>')+'</div>';
+    h+='<div class="fl-block"><div class="fl-h">板块轮动 · 今日领跌</div>'+(lag.length?lag.map(r=>rowRot(r)).join(''):'<div class="pan-sub-note">暂无</div>')+'</div>';
+    h+='<div class="pan-sub-note">数据：东方财富主力净流入（超大单+大单）+ 今日涨跌轮动；仅供参考、不构成建议。</div>';
     el.innerHTML=h;
   }
 
@@ -300,19 +332,23 @@
     el.querySelectorAll('.opp-row').forEach(c=>c.onclick=()=>{ const code=c.dataset.code; if(typeof selectCode==='function') selectCode(code); if(typeof showView==='function') showView('market'); });
   }
 
-  function renderNewsDir(newsDir, err, srcLabel){
+  function renderNewsDir(items, dirMap, err, srcLabel){
     const el=document.getElementById('panNews'); if(!el) return;
     if(err){ el.innerHTML='<div class="pan-sub-note">新闻源暂不可用（公开源连不上时显示此提示）。方向判断请以「七态+资金走向」为准。</div>'; return; }
-    const arr=Object.keys(newsDir).map(c=>({code:c, name:newsDir[c].name, count:newsDir[c].count, dir:newsDir[c].dir, bull:newsDir[c].bull, bear:newsDir[c].bear}))
-      .sort((a,b)=>b.count-a.count).slice(0,16);
-    if(!arr.length){ el.innerHTML='<div class="pan-sub-note">近期公开新闻未命中行业关键词（或源为空）。</div>'; return; }
+    if(!items || !items.length){ el.innerHTML='<div class="pan-sub-note">近期公开新闻未命中行业关键词（或源为空）。</div>'; return; }
     const arrow=d=> d==='up'?'<span class="nd-up">▲利好</span>':(d==='down'?'<span class="nd-dn">▼利空</span>':'<span class="nd-flat">▬中性</span>');
     let h='<div class="nd-list">';
-    arr.forEach(it=>{
-      h+='<div class="nd-row"><span class="nd-name">'+escapeHtml(it.name)+'</span>'
-        +'<span class="nd-cnt">'+it.count+'条</span>'+arrow(it.dir)+'</div>';
+    items.forEach(it=>{
+      const inner='<span class="nd-arrow">'+arrow(it.dir)+'</span>'
+        +'<span class="nd-title">'+escapeHtml(it.title)+'</span>'
+        + (it.name?'<span class="nd-tag">'+escapeHtml(it.name)+'</span>':'');
+      if(it.url){
+        h+='<a class="nd-link" href="'+String(it.url).replace(/"/g,'%22')+'" target="_blank" rel="noopener noreferrer" title="点击跳转原文">'+inner+'</a>';
+      } else {
+        h+='<span class="nd-link nd-nolink">'+inner+'</span>';
+      }
     });
-    h+='</div><div class="pan-sub-note">新闻来源：'+(srcLabel||'公开源')+'（标题关键词匹配，粗判方向，仅供参考、不构成建议）。</div>';
+    h+='</div><div class="pan-sub-note">新闻来源：'+(srcLabel||'公开源')+'（标题关键词匹配，粗判方向；点击标题可跳转原文，仅供参考、不构成建议）。</div>';
     el.innerHTML=h;
   }
 
@@ -352,12 +388,13 @@
       loadAnyNews(res=>{
         if(res&&!res.err&&res.titles&&res.titles.length){
           const dir=matchNewsToIndustry(res.titles);
+          const items=matchNewsToItems(res.items||res.titles.map(t=>({title:t})));
           newsCountVal=Object.keys(dir).length;
-          renderNewsDir(dir,null,res.label);
+          renderNewsDir(items,dir,null,res.label);
           newsReadyFlag=true;
           renderGlobalBar(rows,fundDone,true,newsCountVal);
         } else {
-          renderNewsDir(null,true,null);
+          renderNewsDir(null,null,true,null);
           renderGlobalBar(rows,fundDone,true,0);
         }
         markDone();
@@ -369,5 +406,5 @@
 
   window.renderIndustryPanorama=renderIndustryPanorama;
   window.refreshIndustryPanorama=renderIndustryPanorama;
-  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, loadSinaNews, loadThsNews, loadAnyNews, jsonpGet, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
+  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, matchNewsToItems, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, loadSinaNews, loadThsNews, loadAnyNews, jsonpGet, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
 })();

@@ -63,16 +63,20 @@ const opps=window.document.getElementById('panOpps');
 A(opps.querySelectorAll('.opp-row').length===1,'机会清单仅含强上升(1条, 下跌/缺数据不进)');
 A(opps.innerHTML.indexOf('芯片/半导体')>=0,'机会清单含芯片');
 
-P.renderNewsDir({512760:{name:'芯片/半导体',count:3,bull:2,bear:0,dir:'up'},159992:{name:'医药/医疗',count:2,bull:0,bear:2,dir:'down'}},null);
+P.renderNewsDir([
+  {title:'半导体板块迎来利好大涨',url:'https://x/1',dir:'up',bull:1,bear:0,code:'512760',name:'芯片/半导体'},
+  {title:'医药集采利空大跌',url:'https://x/2',dir:'down',bull:0,bear:1,code:'159992',name:'医药/医疗'},
+], null, null, '新浪财经');
 const news=window.document.getElementById('panNews');
-A(news.querySelectorAll('.nd-row').length===2,'新闻方向渲染 2 行');
+A(news.querySelectorAll('.nd-link').length===2,'新闻方向渲染 2 条可点击新闻');
 A(news.innerHTML.indexOf('▲利好')>=0&&news.innerHTML.indexOf('▼利空')>=0,'新闻方向含利好/利空箭头');
+A(news.innerHTML.indexOf('href="https://x/1"')>=0,'新闻标题带跳转链接(href)');
 
 console.log('— 降级 —');
-P.renderNewsDir(null,true);
+P.renderNewsDir(null,null,true);
 A(window.document.getElementById('panNews').innerHTML.indexOf('新闻源暂不可用')>=0,'新闻源失败→诚实降级文案');
 P.renderFundTrend([]);
-A(window.document.getElementById('panFund').innerHTML.indexOf('加载中或暂不可用')>=0,'资金无数据→降级文案');
+A(window.document.getElementById('panFund').innerHTML.indexOf('板块轮动')>=0,'资金无数据→仍显示板块轮动(不空)');
 P.renderGlobalBar(rows,true,true,2);
 A(window.document.getElementById('panGlobal').querySelectorAll('.gb-item').length>=4,'全局状态条渲染>=4项');
 

@@ -1,8 +1,9 @@
-/* 新闻多源降级链回归测试（jsdom 实跑，零网络）：
- *  场景A：新浪通 → 用「新浪财经」，行业命中
- *  场景B：新浪挂 → 自动切「同花顺快讯」
- *  场景C：都挂 → 显示「新闻源暂不可用」
- *  另含：同花顺 JSONP 解析单测
+/* 新闻多源降级链 + 新闻可点击 + 资金流板块轮动 回归测试（jsdom 实跑，零网络）
+ * 场景A：新浪通 → 用「新浪财经」，新闻可点击跳转
+ * 场景B：新浪挂 → 自动切「同花顺快讯」
+ * 场景C：都挂 → 显示「新闻源暂不可用」
+ * 资金流：东财挂时仍显示「板块轮动 · 今日领涨/领跌」
+ * 单测：matchNewsToItems 把{title,url}映射成带行业方向的可点击条目
  */
 const { JSDOM } = require('jsdom');
 const fs = require('fs'); const path = require('path');
@@ -42,15 +43,15 @@ window.document.createElement = function (tag) {
       if (s.indexOf('10jqka.com.cn') >= 0) {            // 同花顺
         if (mode === 'allfail') { el.onerror && el.onerror(); return; }
         window[cbName]({ code: '200', data: { list: [
-          { title: '半导体设备订单大增', digest: '' },
-          { title: '光伏硅料价格反弹', digest: '' },
-          { title: '白酒龙头业绩超预期', digest: '' },
+          { title: '半导体设备订单大增', digest: '', url: 'https://news.10jqka.com.cn/2026/a1.shtml' },
+          { title: '光伏硅料价格反弹', digest: '', url: 'https://news.10jqka.com.cn/2026/a2.shtml' },
+          { title: '白酒龙头业绩超预期', digest: '', url: 'https://news.10jqka.com.cn/2026/a3.shtml' },
         ] } });
       } else if (s.indexOf('feed.mix.sina.com.cn') >= 0) { // 新浪
         if (mode === 'sinaFail' || mode === 'allfail') { el.onerror && el.onerror(); return; }
         window[cbName]({ result: { data: [
-          { title: '创新药迎来政策利好' },
-          { title: '锂电储能需求旺盛' },
+          { title: '创新药迎来政策利好', url: 'https://finance.sina.com.cn/stock/x/2026-b1.shtml' },
+          { title: '锂电储能需求旺盛', url: 'https://finance.sina.com.cn/stock/x/2026-b2.shtml' },
         ] } });
       } else {                                          // 其他域（东财资金流等）→ 直接降级，不污染新闻
         if (el.onerror) el.onerror();
@@ -71,43 +72,59 @@ window.computeIndustryRows = async () => ({ rows: [
 ] });
 
 (async () => {
-  console.log('— 同花顺 JSONP 解析单测 —');
+  console.log('— matchNewsToItems 单测 —');
+  const items = P.matchNewsToItems([
+    { title: '创新药迎来政策利好', url: 'https://x/1' },
+    { title: '半导体设备订单大增', url: 'https://x/2' },
+    { title: '今日天气晴', url: 'https://x/3' },
+  ]);
+  A(Array.isArray(items) && items.length >= 2, 'matchNewsToItems 返回命中行业的条目数组');
+  A(items.every(it => 'title' in it && 'url' in it && 'dir' in it && 'code' in it), '每条含 title/url/dir/code 字段');
+  A(items.some(it => it.url && it.url.indexOf('http') === 0), '命中的条目带可跳转 url');
+  A(items.some(it => it.code === '159992' && it.name.indexOf('医药') >= 0), '创新药条目正确归属到医药/医疗行业');
+
+  console.log('— 同花顺 JSONP 解析（含 url）单测 —');
   await new Promise(res => {
     P.loadThsNews(50, r => {
       A(r && !r.err && r.label === '同花顺快讯', 'loadThsNews 成功返回 label=同花顺快讯');
-      A(r && r.titles && r.titles.length === 3, 'loadThsNews 解析出 3 条标题');
-      A(r && r.titles.indexOf('半导体设备订单大增') >= 0, 'loadThsNews 标题含「半导体设备订单大增」');
+      A(r && r.items && r.items.length === 3, 'loadThsNews 解析出 3 条带 url 的 items');
+      A(r && r.items[0].url && r.items[0].url.indexOf('http') === 0, 'loadThsNews 条目带可跳转 url');
       res();
     });
   });
   await wait();
 
-  console.log('— 场景A：新浪通 → 用新浪财经 —');
+  console.log('— 场景A：新浪通 → 用新浪财经，新闻可点击跳转 —');
   mode = 'bothok';
   P.resetPanorama();
-  await window.renderIndustryPanorama(true); await wait(); await wait();
+  await window.renderIndustryPanorama(true); await wait(); await wait(); await wait(); await wait();
   let news = window.document.getElementById('panNews').innerHTML;
   A(news.indexOf('新浪财经') >= 0, '场景A：底部标注来源=新浪财经');
   A(news.indexOf('创新药') >= 0 || news.indexOf('医药') >= 0, '场景A：命中创新药/医药行业');
   A(news.indexOf('锂电') >= 0 || news.indexOf('新能源车') >= 0, '场景A：命中锂电/新能源车行业');
   A(news.indexOf('▲利好') >= 0, '场景A：含利好箭头');
+  A(news.indexOf('href="https://finance.sina.com.cn') >= 0, '场景A：新闻标题带可点击链接(href)');
+  A(news.indexOf('target="_blank"') >= 0, '场景A：链接在新标签打开(target=_blank)');
+  let fund = window.document.getElementById('panFund').innerHTML;
+  A(fund.indexOf('板块轮动') >= 0, '场景A：资金流区含「板块轮动·今日领涨/领跌」(永不空)');
 
   console.log('— 场景B：新浪挂 → 自动降同花顺 —');
   mode = 'sinaFail';
   P.resetPanorama();
-  await window.renderIndustryPanorama(true); await wait(); await wait();
+  await window.renderIndustryPanorama(true); await wait(); await wait(); await wait(); await wait();
   news = window.document.getElementById('panNews').innerHTML;
   A(news.indexOf('同花顺快讯') >= 0, '场景B：底部标注来源=同花顺快讯（已降级）');
   A(news.indexOf('半导体') >= 0 || news.indexOf('光伏') >= 0, '场景B：命中半导体/光伏行业');
   A(news.indexOf('新浪财经') < 0, '场景B：不再显示新浪财经');
+  A(news.indexOf('href="https://news.10jqka.com.cn') >= 0, '场景B：同花顺新闻同样可点击跳转');
 
   console.log('— 场景C：都挂 → 诚实降级 —');
   mode = 'allfail';
   P.resetPanorama();
-  await window.renderIndustryPanorama(true); await wait(); await wait();
+  await window.renderIndustryPanorama(true); await wait(); await wait(); await wait(); await wait();
   news = window.document.getElementById('panNews').innerHTML;
   A(news.indexOf('新闻源暂不可用') >= 0, '场景C：显示「新闻源暂不可用」降级文案');
 
-  console.log(fails ? ('\n❌ ' + fails + ' 项失败') : '\n✅ 新闻多源降级链全部通过');
+  console.log(fails ? ('\n❌ ' + fails + ' 项失败') : '\n✅ 新闻多源降级 + 可点击 + 板块轮动 全部通过');
   process.exit(fails ? 1 : 0);
 })();
