@@ -239,14 +239,19 @@
   }
 
   // ---------- 主渲染 ----------
-  async function renderIndustryPanorama(){
+  let _busy=false, _done=false;   // 重入guard + 已渲染标志：根治行情定时器反复整屏重渲染导致的频闪
+  async function renderIndustryPanorama(force){
+    if(_busy) return;                          // 正在渲染 → 直接返回，防并发重入
+    if(_done && !force) return;               // 已渲染过且非强制刷新 → 不重绘（频闪根治点）
     const box=document.getElementById('homePanorama'); if(!box) return;
+    _busy=true;
+    if(force) _done=false;                     // 强制刷新（🔄按钮）：重置，走完整流程
     ['panGlobal','panHeat','panFund','panOpps','panNews'].forEach(id=>{ const e=document.getElementById(id); if(e) e.innerHTML='<div class="pan-sub-note">加载中…</div>'; });
     const warnEl=document.getElementById('homePanoramaWarn'); if(warnEl) warnEl.innerHTML='';
     const POOL=INDUSTRY_POOL.concat((typeof loadCustomSectors==='function')?loadCustomSectors():[]);
     let data;
     try{ data=await computeIndustryRows(POOL); }
-    catch(e){ console.warn('computeIndustryRows failed',e); const b=document.getElementById('panHeat'); if(b) b.innerHTML='<div class="pan-sub-note">行业数据加载失败，请点「刷新」重试。</div>'; return; }
+    catch(e){ console.warn('computeIndustryRows failed',e); const b=document.getElementById('panHeat'); if(b) b.innerHTML='<div class="pan-sub-note">行业数据加载失败，请点「刷新」重试。</div>'; _busy=false; return; }
     const rows=data.rows||[];
     rows.forEach(r=>{ r._pct3y=r.klMiss?null:pricePercentile(r._kl,756); });
 
@@ -255,14 +260,14 @@
     renderHeatmap(rows);
     renderOpps(rows);
 
-    // 渐进加载：资金流（近5日）
-    let fundPending=0, fundDone=false;
+    // 渐进加载：资金流（近5日）——全部到位才一次性渲染，不每只重绘
+    let fundPending=0, fundDone=false, newsReadyFlag=false, newsCountVal=0;
     const finishFund=()=>{ if(fundDone) return; fundPending--; if(fundPending<=0){ fundDone=true; renderFundTrend(rows); renderGlobalBar(rows,true,newsReadyFlag,newsCountVal); } };
     rows.forEach(r=>{ if(r.klMiss||typeof loadFundFlowDays!=='function') return; fundPending++; loadFundFlowDays(r.code,5,res=>{ r._flowDays=res; finishFund(); }); });
     if(fundPending===0) renderFundTrend(rows);
 
-    // 渐进加载：新闻方向
-    let newsReadyFlag=false, newsCountVal=0;
+    // 渐进加载：新闻方向（最后一步，完成即标记 _done）
+    const markDone=()=>{ _done=true; _busy=false; };
     if(typeof loadSinaNews==='function'){
       loadSinaNews(60, res=>{
         if(res&&!res.err&&res.titles&&res.titles.length){
@@ -275,13 +280,14 @@
           renderNewsDir(null,true);
           renderGlobalBar(rows,fundDone,true,0);
         }
+        markDone();
       });
-    } else { renderNewsDir(null,true); }
+    } else { renderNewsDir(null,true); markDone(); }
 
     const tt=document.getElementById('homePanoramaTime'); if(tt&&typeof ts==='function') tt.textContent='更新 '+ts();
   }
 
   window.renderIndustryPanorama=renderIndustryPanorama;
   window.refreshIndustryPanorama=renderIndustryPanorama;
-  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar };
+  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
 })();

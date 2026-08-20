@@ -309,15 +309,26 @@
   .pan-table .pan-miss{opacity:.55;}
   .pan-table .op-lean{font-size:10px;color:var(--sub);margin-top:2px;}
   .pan-pend{color:var(--sub);}
-  /* ---- 行业全景作战图 ---- */
-  #homePanorama{max-height:none;}
+  /* ---- 行业全景作战图：上下左右四宫格 ---- */
+  #homePanorama{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-areas:"heat fund" "opps news";
+    gap:10px;
+    align-items:start;
+  }
   .pan-global{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;}
   .gb-item{display:flex;flex-direction:column;min-width:78px;}
   .gb-item b{font-size:18px;line-height:1.1;color:var(--text);}
   .gb-item b i{font-size:11px;color:var(--sub);font-style:normal;}
   .gb-item span{font-size:11px;color:var(--sub);margin-top:2px;}
   .gb-concl{flex:1 1 240px;justify-content:center;font-size:12px;color:var(--text);line-height:1.5;min-width:200px;}
-  .pan-section{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--card);}
+  .pan-heat{grid-area:heat;}
+  .pan-fund{grid-area:fund;}
+  .pan-opps{grid-area:opps;}
+  .pan-news{grid-area:news;}
+  .pan-section{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:0;background:var(--card);max-height:340px;overflow:auto;}
+  @media(max-width:760px){ #homePanorama{grid-template-columns:1fr;grid-template-areas:"heat" "fund" "opps" "news";} }
   .pan-sec-h{font-size:12.5px;font-weight:600;color:var(--sub);margin-bottom:8px;}
   .pan-sub-note{font-size:11.5px;color:var(--sub);line-height:1.6;padding:6px 0;}
   /* 热力图 */
@@ -730,12 +741,12 @@
         <div class="card">
           <h2>🌐 行业全景 <span class="tag">全行业作战图</span> <button id="btnRefreshPanorama" class="mini-btn" onclick="if(typeof renderIndustryPanorama==='function')renderIndustryPanorama()">🔄 刷新</button><span id="homePanoramaTime" class="uptime"></span></h2>
           <div id="homePanoramaWarn"></div>
+          <div id="panGlobal" class="pan-global"></div>
           <div id="homePanorama">
-            <div id="panGlobal" class="pan-global"></div>
-            <div class="pan-section"><div class="pan-sec-h">① 行业热力图 · 整体全图（色块=今日涨跌，红涨绿跌，点击进详情）</div><div id="panHeat"></div></div>
-            <div class="pan-section"><div class="pan-sec-h">② 资金走向 · 近5日主力净流入与板块轮动</div><div id="panFund"></div></div>
-            <div class="pan-section"><div class="pan-sec-h">③ 涨跌机会清单 · 按七态强度排序</div><div id="panOpps"></div></div>
-            <div class="pan-section"><div class="pan-sec-h">④ 新闻方向 · 公开新闻标题关键词匹配（仅供参考，不构成建议）</div><div id="panNews"></div></div>
+            <div class="pan-section pan-heat"><div class="pan-sec-h">① 行业热力图 · 整体全图（色块=今日涨跌，红涨绿跌，点击进详情）</div><div id="panHeat"></div></div>
+            <div class="pan-section pan-fund"><div class="pan-sec-h">② 资金走向 · 近5日主力净流入与板块轮动</div><div id="panFund"></div></div>
+            <div class="pan-section pan-opps"><div class="pan-sec-h">③ 涨跌机会清单 · 按七态强度排序</div><div id="panOpps"></div></div>
+            <div class="pan-section pan-news"><div class="pan-sec-h">④ 新闻方向 · 公开新闻标题关键词匹配（仅供参考，不构成建议）</div><div id="panNews"></div></div>
           </div>
           <div class="pan-note">七态状态 / 冷热分位(3年) / 主力资金流 / 涨跌 / 技术强弱 — 全部零Key免费源聚合；连不上诚实标灰，<b>仅供观察、不构成任何买卖建议</b>。</div>
         </div>

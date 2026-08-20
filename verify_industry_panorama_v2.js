@@ -76,5 +76,31 @@ A(window.document.getElementById('panFund').innerHTML.indexOf('加载中或暂�
 P.renderGlobalBar(rows,true,true,2);
 A(window.document.getElementById('panGlobal').querySelectorAll('.gb-item').length>=4,'全局状态条渲染>=4项');
 
-console.log(fails? ('\n❌ '+fails+' 项失败') : '\n✅ 全部通过 (行业全景作战图 v2 回归)');
-process.exit(fails?1:0);
+console.log(fails? ('\n⚠️ 同步断言有失败，详见上') : '\n✓ 同步断言全过，进入频闪场景验证…');
+
+// 频闪根治：模拟行情定时器每~15s 调 renderHome→renderIndustryPanorama，验证已渲染后不重绘
+(async()=>{
+  // 让全景内部的 JSONP <script> 立即走 onerror（模拟源连不上），使渲染在毫秒内走降级分支完成，不依赖真实网络
+  const origCreate=window.document.createElement.bind(window.document);
+  window.document.createElement=function(tag){
+    const el=origCreate(tag);
+    if(String(tag).toLowerCase()==='script'){ setTimeout(()=>{ if(el.onerror) el.onerror(); }, 0); }
+    return el;
+  };
+  let cCalls=0;
+  window.computeIndustryRows=async(p)=>{ cCalls++; return {rows:[
+    {name:'芯片/半导体',code:'512760',etf:'',day:2.3,klMiss:false,_st:{state:'bull',label:'强上升',tip:'t'},_kl:[{close:10}]},
+    {name:'新能源车',code:'515030',etf:'',day:-1.2,klMiss:false,_st:{state:'down',label:'下跌',tip:''},_kl:[{close:5}]},
+  ]}; };
+  const wait=()=>new Promise(r=>setTimeout(r,15));
+  window.__pan.resetPanorama();
+  await window.renderIndustryPanorama(); await wait();          // 首次进入渲染（走onerror降级，毫秒完成）
+  A(window.__pan.isPanoramaDone()===true,'首次渲染后 isPanoramaDone=true');
+  await window.renderIndustryPanorama(); await wait();          // 行情tick再次触发（非force）→ 应被 _done 挡住
+  A(cCalls===1,'行情tick重复调用→computeIndustryRows仅跑1次（频闪根治）');
+  await window.renderIndustryPanorama(true); await wait();       // 🔄强制刷新→重置重绘
+  A(cCalls===2,'🔄强制刷新→computeIndustryRows再次跑（=2）');
+  A(window.__pan.isPanoramaDone()===true,'强制刷新后仍 isPanoramaDone=true');
+  console.log(fails? ('\n❌ '+fails+' 项失败') : '\n✅ 全部通过 (行业全景作战图 v2 回归 + 频闪根治)');
+  process.exit(fails?1:0);
+})();
