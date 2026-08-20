@@ -81,23 +81,29 @@
     return out;
   }
 
-  // 东财 主力资金流 历史（JSONP 绕过 CORS）。klt=101 日K，lmt=days 近 N 日。返回净主力数组(元)
+  // 裸6位代码 → 东财 secid（toSecid 只认 sh/sz 前缀，行业池是裸码，这里补齐推断，避免资金流永远 nosecid 失败）
+  function ffSecid(code){
+    if(code.startsWith('sh')) return '1.'+code.slice(2);
+    if(code.startsWith('sz')) return '0.'+code.slice(2);
+    if(code.startsWith('hk')) return '116.'+code.slice(2);
+    if(code.startsWith('us')) return '100.'+code.slice(3).toUpperCase();
+    if(/^(60|68|90|51|56|58|59|5[2-5])/.test(code)) return '1.'+code;   // 上交所
+    if(/^(00|30|15|13|16|18|20|39|12|200|159)/.test(code)) return '0.'+code; // 深交所
+    return '1.'+code;
+  }
+  // 东财 主力资金流 历史（JSONP 绕过 CORS）。push2his 的 daykline 才真正返回近 N 日（klt=101 日K），
+  // push2 的 fflow/kline 对 lmt 不生效、只给今日1根。返回 {days:[近N日主力净流入(元)], last, cont, sum}
   function loadFundFlowDays(code, days, cb){
-    const secid=(typeof toSecid==='function')?toSecid(code):'';
+    const secid=ffSecid(code);
     if(!secid){ cb({err:'nosecid'}); return; }
     const cbName='emffd'+Math.random().toString(36).slice(2,10);
     const t=Date.now();
-    const url='https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?lmt='+days+'&klt=101&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&secid='+encodeURIComponent(secid)+'&cb='+cbName+'&_='+t;
+    const url='https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt='+(days||5)+'&klt=101&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&secid='+encodeURIComponent(secid)+'&cb='+cbName+'&_='+t;
     let done=false;
     function finish(res){ if(done) return; done=true; try{ if(window[cbName]) delete window[cbName]; }catch(e){} cb(res); }
     window[cbName]=function(json){
       if(done) return;
-      try{
-        const kl=json&&json.data&&json.data.klines;
-        if(!kl||!kl.length){ finish({err:'empty'}); return; }
-        const arr=kl.map(p=>{ const a=p.split(','); return parseFloat(a[1]); }); // f52 主力净流入(元)
-        finish({err:null, days:arr, last:arr[arr.length-1], cont:contPos(arr)});
-      }catch(e){ finish({err:'parse'}); }
+      try{ finish(parseFundFlow(json)); }catch(e){ finish({err:'parse'}); }
     };
     const s=document.createElement('script');
     s.src=url;
@@ -105,6 +111,30 @@
     s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
     document.body.appendChild(s);
     setTimeout(function(){ finish({err:'timeout'}); }, 9000);
+  }
+  // 东财资金流原始 JSON → {err, days:[近N日主力净流入], last, cont, sum}（纯解析，便于单测）
+  function parseFundFlow(json){
+    const kl=json&&json.data&&json.data.klines;
+    if(!kl||!kl.length) return {err:'empty'};
+    const arr=kl.map(p=>{ const a=p.split(','); return parseFloat(a[1]); }); // f52 主力净流入(元)
+    const sum=arr.reduce((x,y)=>x+(isNaN(y)?0:y),0);
+    return {err:null, days:arr, last:arr[arr.length-1], cont:contPos(arr), sum};
+  }
+  // 限并发拉全行业资金流（东财对同 IP 高频会 WAF，限制 6 路并发，避免整批失败）
+  function runFundFlows(rows){
+    return new Promise(function(resolve){
+      const targets=rows.filter(function(r){ return !r.klMiss; });
+      const total=targets.length;
+      if(!total){ resolve(); return; }
+      let idx=0, active=0, finished=0; const CONC=6;
+      function step(){
+        while(active<CONC && idx<total){
+          const r=targets[idx++]; active++;
+          loadFundFlowDays(r.code,5,function(res){ r._flowDays=res; active--; finished++; if(finished>=total) resolve(); else step(); });
+        }
+      }
+      step();
+    });
   }
   // 从最新往前数连续净流入(>0)天数
   function contPos(arr){
@@ -191,13 +221,17 @@
     const el=document.getElementById('panFund'); if(!el) return;
     const known=rows.filter(r=>r._flowDays && !r._flowDays.err && r._flowDays.last!=null);
     if(!known.length){ el.innerHTML='<div class="pan-sub-note">资金流加载中或暂不可用（东财源连不上时显示此提示，非故障）。</div>'; return; }
+    const sumAll=known.reduce((a,r)=>a+(r._flowDays.sum||0),0);
     const byToday=known.slice().sort((a,b)=>b._flowDays.last-a._flowDays.last);
-    const topIn=byToday.slice(0,5), topOut=byToday.slice(-5).reverse();
-    const cont=known.filter(r=>r._flowDays.cont>=3).sort((a,b)=>b._flowDays.cont-a._flowDays.cont).slice(0,5);
+    const topIn=byToday.slice(0,6), topOut=byToday.slice(-6).reverse();
+    const cont=known.filter(r=>r._flowDays.cont>=2).sort((a,b)=>b._flowDays.cont-a._flowDays.cont).slice(0,6);
     const row=(r,tag)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r._flowDays.last>=0?'cls-up':'cls-dn')+'">'+fmtMoney(r._flowDays.last)+'</span>'+(tag?'<span class="fl-tag">'+tag+'</span>':'')+'</div>';
-    let h='<div class="fl-col"><div class="fl-h">今日资金净流入 Top5</div>'+topIn.map(r=>row(r)).join('')+'</div>'
-      +'<div class="fl-col"><div class="fl-h">今日资金净流出 Top5</div>'+topOut.map(r=>row(r)).join('')+'</div>';
-    if(cont.length) h+='<div class="fl-col"><div class="fl-h">资金连续净流入(≥3日)·持续看好</div>'+cont.map(r=>row(r,'连'+r._flowDays.cont+'日')).join('')+'</div>';
+    let h='<div class="fl-sum '+(sumAll>=0?'cls-up':'cls-dn')+'">全行业近5日主力净流入合计：'+(sumAll>=0?'+':'')+fmtMoney(sumAll)+'</div>';
+    h+='<div class="fl-grid">'
+      +'<div class="fl-col"><div class="fl-h">今日资金净流入 Top6</div>'+topIn.map(r=>row(r)).join('')+'</div>'
+      +'<div class="fl-col"><div class="fl-h">今日资金净流出 Top6</div>'+topOut.map(r=>row(r)).join('')+'</div>';
+    if(cont.length) h+='<div class="fl-col"><div class="fl-h">资金连续净流入·持续看好</div>'+cont.map(r=>row(r,'连'+r._flowDays.cont+'日')).join('')+'</div>';
+    h+='</div><div class="pan-sub-note">数据：东方财富主力资金净流入（超大单+大单），仅供参考、不构成建议。</div>';
     el.innerHTML=h;
   }
 
@@ -260,11 +294,13 @@
     renderHeatmap(rows);
     renderOpps(rows);
 
-    // 渐进加载：资金流（近5日）——全部到位才一次性渲染，不每只重绘
-    let fundPending=0, fundDone=false, newsReadyFlag=false, newsCountVal=0;
-    const finishFund=()=>{ if(fundDone) return; fundPending--; if(fundPending<=0){ fundDone=true; renderFundTrend(rows); renderGlobalBar(rows,true,newsReadyFlag,newsCountVal); } };
-    rows.forEach(r=>{ if(r.klMiss||typeof loadFundFlowDays!=='function') return; fundPending++; loadFundFlowDays(r.code,5,res=>{ r._flowDays=res; finishFund(); }); });
-    if(fundPending===0) renderFundTrend(rows);
+    // 渐进加载：资金流（近5日，限并发6路防WAF）——全部到位才一次性渲染，不每只重绘
+    let fundDone=false, newsReadyFlag=false, newsCountVal=0;
+    runFundFlows(rows).then(function(){
+      fundDone=true;
+      renderFundTrend(rows);
+      renderGlobalBar(rows,true,newsReadyFlag,newsCountVal);
+    });
 
     // 渐进加载：新闻方向（最后一步，完成即标记 _done）
     const markDone=()=>{ _done=true; _busy=false; };
@@ -289,5 +325,5 @@
 
   window.renderIndustryPanorama=renderIndustryPanorama;
   window.refreshIndustryPanorama=renderIndustryPanorama;
-  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
+  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
 })();
