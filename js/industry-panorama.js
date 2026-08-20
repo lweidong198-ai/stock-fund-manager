@@ -332,21 +332,30 @@
     el.querySelectorAll('.opp-row').forEach(c=>c.onclick=()=>{ const code=c.dataset.code; if(typeof selectCode==='function') selectCode(code); if(typeof showView==='function') showView('market'); });
   }
 
+  // 新闻方向：按「利好 / 利空 / 中性」分组展示，每条可点击跳转原文；无某方向则不显示该组
   function renderNewsDir(items, dirMap, err, srcLabel){
     const el=document.getElementById('panNews'); if(!el) return;
     if(err){ el.innerHTML='<div class="pan-sub-note">新闻源暂不可用（公开源连不上时显示此提示）。方向判断请以「七态+资金走向」为准。</div>'; return; }
     if(!items || !items.length){ el.innerHTML='<div class="pan-sub-note">近期公开新闻未命中行业关键词（或源为空）。</div>'; return; }
     const arrow=d=> d==='up'?'<span class="nd-up">▲利好</span>':(d==='down'?'<span class="nd-dn">▼利空</span>':'<span class="nd-flat">▬中性</span>');
+    const byDir={up:[],down:[],flat:[]};
+    items.forEach(it=>{ const d=(it.dir==='up'||it.dir==='down')?it.dir:'flat'; byDir[d].push(it); });
+    const groups=[['up','利好','nd-up'],['down','利空','nd-dn'],['flat','中性','nd-flat']];
     let h='<div class="nd-list">';
-    items.forEach(it=>{
-      const inner='<span class="nd-arrow">'+arrow(it.dir)+'</span>'
-        +'<span class="nd-title">'+escapeHtml(it.title)+'</span>'
-        + (it.name?'<span class="nd-tag">'+escapeHtml(it.name)+'</span>':'');
-      if(it.url){
-        h+='<a class="nd-link" href="'+String(it.url).replace(/"/g,'%22')+'" target="_blank" rel="noopener noreferrer" title="点击跳转原文">'+inner+'</a>';
-      } else {
-        h+='<span class="nd-link nd-nolink">'+inner+'</span>';
-      }
+    groups.forEach(g=>{
+      const list=byDir[g[0]]; if(!list || !list.length) return;
+      h+='<div class="nd-grp"><div class="nd-grp-h '+g[2]+'">'+g[1]+'（'+list.length+'条）</div>';
+      list.forEach(it=>{
+        const inner='<span class="nd-arrow">'+arrow(it.dir)+'</span>'
+          +'<span class="nd-title">'+escapeHtml(it.title)+'</span>'
+          + (it.name?'<span class="nd-tag">'+escapeHtml(it.name)+'</span>':'');
+        if(it.url){
+          h+='<a class="nd-link" href="'+String(it.url).replace(/"/g,'%22')+'" target="_blank" rel="noopener noreferrer" title="点击跳转原文">'+inner+'</a>';
+        } else {
+          h+='<span class="nd-link nd-nolink">'+inner+'</span>';
+        }
+      });
+      h+='</div>';
     });
     h+='</div><div class="pan-sub-note">新闻来源：'+(srcLabel||'公开源')+'（标题关键词匹配，粗判方向；点击标题可跳转原文，仅供参考、不构成建议）。</div>';
     el.innerHTML=h;

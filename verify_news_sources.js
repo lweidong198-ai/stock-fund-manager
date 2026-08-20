@@ -46,12 +46,14 @@ window.document.createElement = function (tag) {
           { title: '半导体设备订单大增', digest: '', url: 'https://news.10jqka.com.cn/2026/a1.shtml' },
           { title: '光伏硅料价格反弹', digest: '', url: 'https://news.10jqka.com.cn/2026/a2.shtml' },
           { title: '白酒龙头业绩超预期', digest: '', url: 'https://news.10jqka.com.cn/2026/a3.shtml' },
+          { title: '光伏企业净利降幅明显', digest: '', url: 'https://news.10jqka.com.cn/2026/a4.shtml' },
         ] } });
       } else if (s.indexOf('feed.mix.sina.com.cn') >= 0) { // 新浪
         if (mode === 'sinaFail' || mode === 'allfail') { el.onerror && el.onerror(); return; }
         window[cbName]({ result: { data: [
           { title: '创新药迎来政策利好', url: 'https://finance.sina.com.cn/stock/x/2026-b1.shtml' },
           { title: '锂电储能需求旺盛', url: 'https://finance.sina.com.cn/stock/x/2026-b2.shtml' },
+          { title: '光伏龙头遭减持抛售', url: 'https://finance.sina.com.cn/stock/x/2026-b3.shtml' },
         ] } });
       } else {                                          // 其他域（东财资金流等）→ 直接降级，不污染新闻
         if (el.onerror) el.onerror();
@@ -83,11 +85,24 @@ window.computeIndustryRows = async () => ({ rows: [
   A(items.some(it => it.url && it.url.indexOf('http') === 0), '命中的条目带可跳转 url');
   A(items.some(it => it.code === '159992' && it.name.indexOf('医药') >= 0), '创新药条目正确归属到医药/医疗行业');
 
+  console.log('— renderNewsDir 按利好/利空/中性分组单测 —');
+  P.renderNewsDir([
+    { title: 'A创新药政策利好', url: 'https://x/1', dir: 'up', name: '医药' },
+    { title: 'B光伏遭减持', url: 'https://x/2', dir: 'down', name: '光伏' },
+    { title: 'C天气晴', url: '', dir: 'flat', name: '' },
+  ], {}, null, '测试源');
+  let nd = window.document.getElementById('panNews').innerHTML;
+  A(nd.indexOf('利好（') >= 0 && nd.indexOf('利空（') >= 0 && nd.indexOf('中性（') >= 0, '分组单测：利好/利空/中性三组标题均出现');
+  A(nd.indexOf('▼利空') >= 0, '分组单测：利空箭头▼利空存在');
+  A(nd.indexOf('target="_blank"') >= 0, '分组单测：有链接则新标签打开');
+  A(nd.indexOf('新闻来源：测试源') >= 0, '分组单测：底部标注来源');
+  A(nd.indexOf('nd-grp') >= 0, '分组单测：使用分组容器样式');
+
   console.log('— 同花顺 JSONP 解析（含 url）单测 —');
   await new Promise(res => {
     P.loadThsNews(50, r => {
       A(r && !r.err && r.label === '同花顺快讯', 'loadThsNews 成功返回 label=同花顺快讯');
-      A(r && r.items && r.items.length === 3, 'loadThsNews 解析出 3 条带 url 的 items');
+      A(r && r.items && r.items.length === 4, 'loadThsNews 解析出 4 条带 url 的 items');
       A(r && r.items[0].url && r.items[0].url.indexOf('http') === 0, 'loadThsNews 条目带可跳转 url');
       res();
     });
@@ -103,6 +118,8 @@ window.computeIndustryRows = async () => ({ rows: [
   A(news.indexOf('创新药') >= 0 || news.indexOf('医药') >= 0, '场景A：命中创新药/医药行业');
   A(news.indexOf('锂电') >= 0 || news.indexOf('新能源车') >= 0, '场景A：命中锂电/新能源车行业');
   A(news.indexOf('▲利好') >= 0, '场景A：含利好箭头');
+  A(news.indexOf('利空（') >= 0, '场景A：利空方向分组可见，含「利空（」');
+  A(news.indexOf('▼利空') >= 0, '场景A：含利空箭头▼利空');
   A(news.indexOf('href="https://finance.sina.com.cn') >= 0, '场景A：新闻标题带可点击链接(href)');
   A(news.indexOf('target="_blank"') >= 0, '场景A：链接在新标签打开(target=_blank)');
   let fund = window.document.getElementById('panFund').innerHTML;
@@ -116,6 +133,8 @@ window.computeIndustryRows = async () => ({ rows: [
   A(news.indexOf('同花顺快讯') >= 0, '场景B：底部标注来源=同花顺快讯（已降级）');
   A(news.indexOf('半导体') >= 0 || news.indexOf('光伏') >= 0, '场景B：命中半导体/光伏行业');
   A(news.indexOf('新浪财经') < 0, '场景B：不再显示新浪财经');
+  A(news.indexOf('利空（') >= 0, '场景B：利空方向分组可见，含「利空（」');
+  A(news.indexOf('▼利空') >= 0, '场景B：含利空箭头▼利空');
   A(news.indexOf('href="https://news.10jqka.com.cn') >= 0, '场景B：同花顺新闻同样可点击跳转');
 
   console.log('— 场景C：都挂 → 诚实降级 —');
