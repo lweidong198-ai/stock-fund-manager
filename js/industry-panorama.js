@@ -114,26 +114,37 @@
     if(/^(00|30|15|13|16|18|20|39|12|200|159)/.test(code)) return '0.'+code; // 深交所
     return '1.'+code;
   }
-  // 东财 主力资金流 历史（JSONP 绕过 CORS）。push2his 的 daykline 才真正返回近 N 日（klt=101 日K），
-  // push2 的 fflow/kline 对 lmt 不生效、只给今日1根。返回 {days:[近N日主力净流入(元)], last, cont, sum}
-  function loadFundFlowDays(code, days, cb){
+  // 东财 push2his 主力资金流历史（JSONP 绕过 CORS）。daykline 才真正返回近 N 日（klt=101 日K）。
+  // tries>1 时带自动重试（抗限流/拦截误伤），onerror/超时各重试 tries-1 次，每次间隔 500ms。
+  // 返回 {err, days:[近N日主力净流入(元)], dates:[日期], last, cont, sum}
+  function loadFundFlowDays(code, days, cb, tries){
     const secid=ffSecid(code);
     if(!secid){ cb({err:'nosecid'}); return; }
-    const cbName='emffd'+Math.random().toString(36).slice(2,10);
-    const t=Date.now();
-    const url='https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt='+(days||5)+'&klt=101&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&secid='+encodeURIComponent(secid)+'&cb='+cbName+'&_='+t;
-    let done=false;
-    function finish(res){ if(done) return; done=true; try{ if(window[cbName]) delete window[cbName]; }catch(e){} cb(res); }
-    window[cbName]=function(json){
+    let triesLeft=(tries&&tries>0)?tries:1;
+    let done=false, curCb='';
+    function finish(res){ if(done) return; done=true; try{ if(window[curCb]) delete window[curCb]; }catch(e){} cb(res); }
+    function attempt(){
       if(done) return;
-      try{ finish(parseFundFlow(json)); }catch(e){ finish({err:'parse'}); }
-    };
-    const s=document.createElement('script');
-    s.src=url;
-    s.onerror=function(){ finish({err:'net'}); if(s.parentNode) s.parentNode.removeChild(s); };
-    s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
-    document.body.appendChild(s);
-    setTimeout(function(){ finish({err:'timeout'}); }, 9000);
+      triesLeft--;
+      curCb='emffd'+Math.random().toString(36).slice(2,10);
+      const t=Date.now();
+      const url='https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt='+(days||5)+'&klt=101&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&secid='+encodeURIComponent(secid)+'&cb='+curCb+'&_='+t;
+      window[curCb]=function(json){
+        if(done) return;
+        try{ finish(parseFundFlow(json)); }catch(e){ finish({err:'parse'}); }
+      };
+      const s=document.createElement('script');
+      s.src=url;
+      s.onerror=function(){ if(s.parentNode) s.parentNode.removeChild(s); if(triesLeft>0) setTimeout(attempt,500); else finish({err:'net'}); };
+      s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
+      document.body.appendChild(s);
+      setTimeout(function(){
+        if(done) return;
+        try{ if(window[curCb]) delete window[curCb]; }catch(e){}
+        if(triesLeft>0) setTimeout(attempt,500); else finish({err:'timeout'});
+      }, 9000);
+    }
+    attempt();
   }
   // 东财资金流原始 JSON → {err, days:[近N日主力净流入], dates:[对应日期], last, cont, sum}（纯解析，便于单测）
   function parseFundFlow(json){
@@ -382,10 +393,11 @@
   function loadSingleFlow(code, days){
     const el=document.getElementById('panFundSingle'); if(!el) return;
     const name=fundNameOf(code);
+    // tries=3：历史源抗限流重试（onerror/超时各重试2次），3次全挂才降级 ulist 当日
     loadFundFlowDays(code, days, function(res){
       if(!el) return;
       if(res&&res.err){
-        // 历史资金流源(push2his)连不上 → 降级用 ulist(同域clist) 当日主力资金，不再死报错
+        // 历史资金流源(push2his)连不上 → 降级用 ulist(同域clist) 当日主力资金，并给出诊断与解决指引
         loadUlistFlow(code, function(ul){
           if(!el) return;
           if(ul&&!ul.err){
@@ -393,7 +405,7 @@
             el.innerHTML='<div class="ff-single">'
               +'<div class="ff-single-h"><b>'+escapeHtml(name||ul.name||code)+'</b> 当日主力资金<button type="button" class="ff-qback">回总览</button></div>'
               +'<div class="fl-sum '+(v>=0?'cls-up':'cls-dn')+'">当日主力净流入：'+(v>=0?'+':'')+fmtMoney(v)+(ul.pct!=null?'　净占比 '+(ul.pct>0?'+':'')+(ul.pct/100).toFixed(2)+'%':'')+'</div>'
-              +'<div class="pan-sub-note">近'+days+'日历史资金流（东方财富）当前网络连不上，已降级显示当日主力资金。可尝试关闭广告拦截插件或更换网络后查看历史。</div>'
+              +'<div class="pan-sub-note">近'+days+'日历史资金流（东方财富 push2his）当前网络连不上（多被广告拦截插件屏蔽或接口限流），已降级显示当日主力资金。<br>解决：①本页加白名单/关闭广告拦截插件 ②换网络（如手机热点）③<button type="button" class="ff-qretry">再试一次</button></div>'
               +'</div>';
             return;
           }
@@ -423,7 +435,7 @@
         +'<div class="ff-list">'+(rowsH||'<div class="pan-sub-note">暂无数据</div>')+'</div>'
         +'<div class="pan-sub-note">数据：东方财富主力资金（超大单+大单），仅供参考、不构成建议。</div>'
         +'</div>';
-    });
+    }, 3);
   }
 
   function renderFundTrend(rows, cl){
@@ -440,6 +452,9 @@
           renderFundTrend(_lastRows,_lastCl);
         } else if(t.classList.contains('ff-qgo')){
           doFundQuery();
+        } else if(t.classList.contains('ff-qretry')){
+          const el0=document.getElementById('panFundSingle'); if(el0) el0.innerHTML='<div class="pan-sub-note">重试中…</div>';
+          loadSingleFlow(_fundQuery.code, _fundQuery.days);
         } else if(t.classList.contains('ff-qback')){
           _fundQuery.code=null;
           renderFundTrend(_lastRows,_lastCl);

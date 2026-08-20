@@ -35,7 +35,8 @@ const CLIST_JSON = { rc: 0, data: { total: 2, diff: {
 const ULIST_JSON = { data: { diff: [ { f12: '515790', f14: '光伏ETF华泰柏瑞', f62: 7569287.0, f184: 545 } ] } };
 
 // 拦截 JSONP：mode 控制 daykline(历史) 是否可用；ulist/clist 始终可用（模拟用户 push2 域可达、push2his 被限）
-let mode = 'allok'; // 'allok' | 'dayklinefail' | 'allfail'
+let mode = 'allok'; // 'allok' | 'dayklinefail'(3次全挂) | 'retryok'(前2次挂第3次通) | 'allfail'
+let dayklineCalls = 0;
 const origCreate = window.document.createElement.bind(window.document);
 window.document.createElement = function (tag) {
   const el = origCreate(tag);
@@ -45,7 +46,10 @@ window.document.createElement = function (tag) {
       const m = s.match(/[?&](?:cb|callback)=([^&]+)/); const cb = m && m[1];
       if (!cb) { if (el.onerror) el.onerror(); return; }
       if (s.indexOf('fflow/daykline') >= 0) {
-        if (mode !== 'allok') { el.onerror && el.onerror(); return; }
+        dayklineCalls++;
+        if (mode === 'dayklinefail') { el.onerror && el.onerror(); return; }
+        if (mode === 'retryok' && dayklineCalls < 3) { el.onerror && el.onerror(); return; }
+        if (mode === 'allfail') { el.onerror && el.onerror(); return; }
         const lm = s.match(/lmt=(\d+)/); const n = lm ? parseInt(lm[1], 10) : 5;
         const kl = [];
         for (let i = n; i >= 1; i--) {
@@ -63,6 +67,7 @@ window.document.createElement = function (tag) {
   }
   return el;
 };
+const waitMs = (ms) => new Promise(r => setTimeout(r, ms));
 
 let fails = 0; const A = (c, m) => { if (!c) { console.log('  ✗ ' + m); fails++; } else console.log('  ✓ ' + m); };
 const wait = () => new Promise(r => setTimeout(r, 30));
@@ -151,28 +156,50 @@ window.computeIndustryRows = async () => ({ rows: [
   });
   await wait();
 
-  console.log('— 降级：daykline历史源挂 → ulist当日兜底 —');
-  mode = 'dayklinefail';
+  console.log('— 重试成功：daykline 前2次挂、第3次通（抗限流） —');
+  mode = 'retryok'; dayklineCalls = 0;
+  P.resetPanorama();
+  P.renderFundTrend(rows, { err: null });
+  const selR = q('[data-role="qsel"]'); selR.value = '512760';
+  selR.dispatchEvent(new window.Event('change', { bubbles: true }));
+  q('[data-role="qgo"]').click();
+  await waitMs(2400);
+  h = pf().innerHTML;
+  console.log('DBG retryok: calls=' + dayklineCalls + ' has5d=' + h.indexOf('主力净流入') + ' hasBars=' + h.indexOf('ff-bars'));
+  A(dayklineCalls >= 3, '重试：daykline 共发起 >=3 次请求');
+  A(h.indexOf('主力净流入') >= 0 && h.indexOf('ff-bars') >= 0, '重试成功后恢复历史 N 日柱状图（未降级）');
+
+  console.log('— 降级：daykline历史源3次全挂 → ulist当日兜底 —');
+  mode = 'dayklinefail'; dayklineCalls = 0;
   P.resetPanorama();
   P.renderFundTrend(rows, { err: null });
   const sel3 = q('[data-role="qsel"]'); sel3.value = '515790';
   sel3.dispatchEvent(new window.Event('change', { bubbles: true }));
   q('[data-role="qgo"]').click();
-  await wait(); await wait(); await wait(); await wait();
+  await waitMs(2400);
   h = pf().innerHTML;
+  A(dayklineCalls >= 3, '降级：daykline 重试3次后失败');
   A(h.indexOf('当日主力净流入') >= 0, '降级：显示「当日主力净流入」');
   A(h.indexOf('光伏') >= 0, '降级：显示ETF名称(光伏)');
-  A(h.indexOf('已降级显示当日主力资金') >= 0, '降级：标注已降级+关闭插件提示');
-  A(h.indexOf('净占比') >= 0, '降级：显示净占比');
+  A(h.indexOf('push2his') >= 0, '降级：诊断文案含 push2his 域名');
+  A(h.indexOf('ff-qretry') >= 0, '降级：含「再试一次」按钮');
+
+  console.log('— 点「再试一次」→ 恢复历史 —');
+  mode = 'allok'; dayklineCalls = 0;
+  q('.ff-qretry').click();
+  await waitMs(600);
+  h = pf().innerHTML;
+  A(h.indexOf('主力净流入') >= 0 && h.indexOf('ff-bars') >= 0, '再试一次后恢复历史 N 日柱状图');
+  A(h.indexOf('已降级') < 0, '再试一次成功后不再显示降级标注');
 
   console.log('— 都挂 → 诚实提示 —');
-  mode = 'allfail';
+  mode = 'allfail'; dayklineCalls = 0;
   P.resetPanorama();
   P.renderFundTrend(rows, { err: null });
   const sel4 = q('[data-role="qsel"]'); sel4.value = '515790';
   sel4.dispatchEvent(new window.Event('change', { bubbles: true }));
   q('[data-role="qgo"]').click();
-  await wait(); await wait(); await wait(); await wait();
+  await waitMs(2400);
   h = pf().innerHTML;
   A(h.indexOf('暂连不上') >= 0, '全挂：显示「主力资金流暂连不上」');
 
