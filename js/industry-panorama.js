@@ -209,29 +209,38 @@
     document.body.appendChild(s);
     setTimeout(function(){ finish({err:'timeout'}); }, 9000);
   }
-  // 东财 ulist 单只ETF当日主力净流入（push2 域，和 clist 同域，网络更稳；用于 daykline(push2his) 连不上时的降级）
+  // 东财 ulist 单只ETF当日主力净流入（push2 域；daykline(push2his) 连不上时的降级，带2次重试抗限流）
   // 返回 {err, name, net:主力净流入(元), pct:净占比(万分之，东财 f184)}
   function loadUlistFlow(code, cb){
-    const cbName='emul'+(Math.random().toString(36).slice(2,10));
     const secid=ffSecid(code);
     if(!secid){ cb({err:'nosecid'}); return; }
-    const url='https://push2.eastmoney.com/api/qt/ulist.np/get?secids='+encodeURIComponent(secid)+'&fields=f12,f14,f62,f184&cb='+cbName+'&_='+Date.now();
-    let done=false;
-    function finish(res){ if(done) return; done=true; try{ if(window[cbName]) delete window[cbName]; }catch(e){} cb(res); }
-    window[cbName]=function(json){
+    let triesLeft=2, done=false, curCb='';
+    function finish(res){ if(done) return; done=true; try{ if(window[curCb]) delete window[curCb]; }catch(e){} cb(res); }
+    function attempt(){
       if(done) return;
-      try{
-        const diff=json&&json.data&&json.data.diff;
-        const it=diff&&diff[0];
-        if(!it||it.f62==null) return finish({err:'empty'});
-        finish({err:null, name:it.f14, net:it.f62, pct:it.f184});
-      }catch(e){ finish({err:'parse'}); }
-    };
-    const s=document.createElement('script'); s.src=url;
-    s.onerror=function(){ finish({err:'net'}); if(s.parentNode) s.parentNode.removeChild(s); };
-    s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
-    document.body.appendChild(s);
-    setTimeout(function(){ finish({err:'timeout'}); }, 7000);
+      triesLeft--;
+      curCb='emul'+Math.random().toString(36).slice(2,10);
+      const url='https://push2.eastmoney.com/api/qt/ulist.np/get?secids='+encodeURIComponent(secid)+'&fields=f12,f14,f62,f184&cb='+curCb+'&_='+Date.now();
+      window[curCb]=function(json){
+        if(done) return;
+        try{
+          const diff=json&&json.data&&json.data.diff;
+          const it=diff&&diff[0];
+          if(!it||it.f62==null) return finish({err:'empty'});
+          finish({err:null, name:it.f14, net:it.f62, pct:it.f184});
+        }catch(e){ finish({err:'parse'}); }
+      };
+      const s=document.createElement('script'); s.src=url;
+      s.onerror=function(){ if(s.parentNode) s.parentNode.removeChild(s); if(triesLeft>0) setTimeout(attempt,400); else finish({err:'net'}); };
+      s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
+      document.body.appendChild(s);
+      setTimeout(function(){
+        if(done) return;
+        try{ if(window[curCb]) delete window[curCb]; }catch(e){}
+        if(triesLeft>0) setTimeout(attempt,400); else finish({err:'timeout'});
+      }, 7000);
+    }
+    attempt();
   }
   // 从最新往前数连续净流入(>0)天数
   function contPos(arr){
@@ -397,7 +406,7 @@
     loadFundFlowDays(code, days, function(res){
       if(!el) return;
       if(res&&res.err){
-        // 历史资金流源(push2his)连不上 → 降级用 ulist(同域clist) 当日主力资金，并给出诊断与解决指引
+        // 历史资金流源(push2his)连不上 → 降级用 ulist(当日)，给出诊断与解决指引
         loadUlistFlow(code, function(ul){
           if(!el) return;
           if(ul&&!ul.err){
@@ -409,7 +418,14 @@
               +'</div>';
             return;
           }
-          el.innerHTML='<div class="pan-sub-note">'+escapeHtml(name||code)+' 主力资金流暂连不上（东方财富源）。<button type="button" class="ff-qback">回行业总览</button></div>';
+          // ulist 也失败：大概率整个东方财富域被网络/插件拦截。给今日涨跌(腾讯，可正常显示)+明确诊断+解法
+          const row=_lastRows.find(x=>x.code===code);
+          const day=(row&&row.day!=null)?row.day:null;
+          el.innerHTML='<div class="ff-single">'
+            +'<div class="ff-single-h"><b>'+escapeHtml(name||code)+'</b> 资金流查询<button type="button" class="ff-qback">回总览</button></div>'
+            +(day!=null?'<div class="fl-sum '+(day>=0?'cls-up':'cls-dn')+'">今日涨跌：'+(day>=0?'+':'')+day.toFixed(2)+'%（腾讯行情，正常显示）</div>':'')
+            +'<div class="pan-sub-note">主力资金流数据源（东方财富）在当前网络连不上（含当日接口，疑似被广告拦截插件或网络拦截），无法获取该ETF的资金流入/流出。<br>解决：①本站加白名单/关闭广告拦截插件 ②换网络（如手机热点）③本地双击 index.html 打开试试（file:// 大多能绕开拦截）④<button type="button" class="ff-qretry">再试一次</button></div>'
+            +'</div>';
         });
         return;
       }

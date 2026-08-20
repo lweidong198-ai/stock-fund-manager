@@ -192,16 +192,19 @@ window.computeIndustryRows = async () => ({ rows: [
   A(h.indexOf('主力净流入') >= 0 && h.indexOf('ff-bars') >= 0, '再试一次后恢复历史 N 日柱状图');
   A(h.indexOf('已降级') < 0, '再试一次成功后不再显示降级标注');
 
-  console.log('— 都挂 → 诚实提示 —');
+  console.log('— 都挂（东财全域被拦）→ 今日涨跌+诊断提示 —');
   mode = 'allfail'; dayklineCalls = 0;
   P.resetPanorama();
   P.renderFundTrend(rows, { err: null });
   const sel4 = q('[data-role="qsel"]'); sel4.value = '515790';
   sel4.dispatchEvent(new window.Event('change', { bubbles: true }));
   q('[data-role="qgo"]').click();
-  await waitMs(2400);
+  await waitMs(3400);
   h = pf().innerHTML;
-  A(h.indexOf('暂连不上') >= 0, '全挂：显示「主力资金流暂连不上」');
+  A(h.indexOf('今日涨跌') >= 0, '全挂：显示该ETF今日涨跌(腾讯本地数据，兜底不空白)');
+  A(h.indexOf('东方财富') >= 0 && h.indexOf('拦截') >= 0, '全挂：诊断明确「东方财富被拦截」');
+  A(h.indexOf('ff-qretry') >= 0, '全挂：仍可「再试一次」');
+  A(h.indexOf('本地双击 index.html') >= 0, '全挂：给出本地双击 file:// 解法');
 
   console.log(fails ? ('\n❌ ' + fails + ' 项失败') : '\n✅ 单ETF资金流查询 全部通过');
   process.exit(fails ? 1 : 0);
