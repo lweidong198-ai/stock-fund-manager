@@ -32,8 +32,10 @@ const CLIST_JSON = { rc: 0, data: { total: 2, diff: {
   '0': { f12: 'BK1', f14: '半导体', f62: 1000000.0, f184: 2.0 },
   '1': { f12: 'BK2', f14: '光伏设备', f62: -500000.0, f184: -1.0 },
 } } };
+const ULIST_JSON = { data: { diff: [ { f12: '515790', f14: '光伏ETF华泰柏瑞', f62: 7569287.0, f184: 545 } ] } };
 
-// 拦截 JSONP：fflow/daykline 按 lmt 回灌 N 条（带日期），clist 回灌行业板块
+// 拦截 JSONP：mode 控制 daykline(历史) 是否可用；ulist/clist 始终可用（模拟用户 push2 域可达、push2his 被限）
+let mode = 'allok'; // 'allok' | 'dayklinefail' | 'allfail'
 const origCreate = window.document.createElement.bind(window.document);
 window.document.createElement = function (tag) {
   const el = origCreate(tag);
@@ -43,6 +45,7 @@ window.document.createElement = function (tag) {
       const m = s.match(/[?&](?:cb|callback)=([^&]+)/); const cb = m && m[1];
       if (!cb) { if (el.onerror) el.onerror(); return; }
       if (s.indexOf('fflow/daykline') >= 0) {
+        if (mode !== 'allok') { el.onerror && el.onerror(); return; }
         const lm = s.match(/lmt=(\d+)/); const n = lm ? parseInt(lm[1], 10) : 5;
         const kl = [];
         for (let i = n; i >= 1; i--) {
@@ -50,6 +53,9 @@ window.document.createElement = function (tag) {
           kl.push('2026-08-' + day + ',' + (i % 3 === 0 ? -1000000 * i : 1000000 * i));
         }
         window[cb]({ data: { klines: kl } });
+      } else if (s.indexOf('ulist.np/get') >= 0) {
+        if (mode === 'allfail') { el.onerror && el.onerror(); return; }
+        window[cb](ULIST_JSON);
       } else if (s.indexOf('clist/get') >= 0) {
         window[cb](CLIST_JSON);
       } else { el.onerror && el.onerror(); }
@@ -133,6 +139,42 @@ window.computeIndustryRows = async () => ({ rows: [
   const inp2 = q('[data-role="qinp"]'); inp2.value = '';
   q('[data-role="qgo"]').click();
   A(window.__lastToast && window.__lastToast.indexOf('ETF代码') >= 0, '无代码点查询 → toast 提示选择ETF');
+
+  console.log('— loadUlistFlow 解析单测 —');
+  await new Promise(res => {
+    P.loadUlistFlow('515790', r => {
+      A(r && !r.err && r.net === 7569287, 'loadUlistFlow 解析出当日主力净流入 7569287');
+      A(r && r.name && r.name.indexOf('光伏') >= 0, 'loadUlistFlow 解析出名称(光伏ETF华泰柏瑞)');
+      A(r && r.pct === 545, 'loadUlistFlow 解析出净占比 f184=545');
+      res();
+    });
+  });
+  await wait();
+
+  console.log('— 降级：daykline历史源挂 → ulist当日兜底 —');
+  mode = 'dayklinefail';
+  P.resetPanorama();
+  P.renderFundTrend(rows, { err: null });
+  const sel3 = q('[data-role="qsel"]'); sel3.value = '515790';
+  sel3.dispatchEvent(new window.Event('change', { bubbles: true }));
+  q('[data-role="qgo"]').click();
+  await wait(); await wait(); await wait(); await wait();
+  h = pf().innerHTML;
+  A(h.indexOf('当日主力净流入') >= 0, '降级：显示「当日主力净流入」');
+  A(h.indexOf('光伏') >= 0, '降级：显示ETF名称(光伏)');
+  A(h.indexOf('已降级显示当日主力资金') >= 0, '降级：标注已降级+关闭插件提示');
+  A(h.indexOf('净占比') >= 0, '降级：显示净占比');
+
+  console.log('— 都挂 → 诚实提示 —');
+  mode = 'allfail';
+  P.resetPanorama();
+  P.renderFundTrend(rows, { err: null });
+  const sel4 = q('[data-role="qsel"]'); sel4.value = '515790';
+  sel4.dispatchEvent(new window.Event('change', { bubbles: true }));
+  q('[data-role="qgo"]').click();
+  await wait(); await wait(); await wait(); await wait();
+  h = pf().innerHTML;
+  A(h.indexOf('暂连不上') >= 0, '全挂：显示「主力资金流暂连不上」');
 
   console.log(fails ? ('\n❌ ' + fails + ' 项失败') : '\n✅ 单ETF资金流查询 全部通过');
   process.exit(fails ? 1 : 0);

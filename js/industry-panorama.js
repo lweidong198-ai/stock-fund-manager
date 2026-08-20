@@ -198,6 +198,30 @@
     document.body.appendChild(s);
     setTimeout(function(){ finish({err:'timeout'}); }, 9000);
   }
+  // 东财 ulist 单只ETF当日主力净流入（push2 域，和 clist 同域，网络更稳；用于 daykline(push2his) 连不上时的降级）
+  // 返回 {err, name, net:主力净流入(元), pct:净占比(万分之，东财 f184)}
+  function loadUlistFlow(code, cb){
+    const cbName='emul'+(Math.random().toString(36).slice(2,10));
+    const secid=ffSecid(code);
+    if(!secid){ cb({err:'nosecid'}); return; }
+    const url='https://push2.eastmoney.com/api/qt/ulist.np/get?secids='+encodeURIComponent(secid)+'&fields=f12,f14,f62,f184&cb='+cbName+'&_='+Date.now();
+    let done=false;
+    function finish(res){ if(done) return; done=true; try{ if(window[cbName]) delete window[cbName]; }catch(e){} cb(res); }
+    window[cbName]=function(json){
+      if(done) return;
+      try{
+        const diff=json&&json.data&&json.data.diff;
+        const it=diff&&diff[0];
+        if(!it||it.f62==null) return finish({err:'empty'});
+        finish({err:null, name:it.f14, net:it.f62, pct:it.f184});
+      }catch(e){ finish({err:'parse'}); }
+    };
+    const s=document.createElement('script'); s.src=url;
+    s.onerror=function(){ finish({err:'net'}); if(s.parentNode) s.parentNode.removeChild(s); };
+    s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
+    document.body.appendChild(s);
+    setTimeout(function(){ finish({err:'timeout'}); }, 7000);
+  }
   // 从最新往前数连续净流入(>0)天数
   function contPos(arr){
     let n=0; for(let i=arr.length-1;i>=0;i--){ if(arr[i]>0) n++; else if(arr[i]<0) break; else break; }
@@ -360,7 +384,23 @@
     const name=fundNameOf(code);
     loadFundFlowDays(code, days, function(res){
       if(!el) return;
-      if(res&&res.err){ el.innerHTML='<div class="pan-sub-note">'+escapeHtml(name||code)+' 主力资金流暂连不上（东方财富源）。<button type="button" class="ff-qback">回行业总览</button></div>'; return; }
+      if(res&&res.err){
+        // 历史资金流源(push2his)连不上 → 降级用 ulist(同域clist) 当日主力资金，不再死报错
+        loadUlistFlow(code, function(ul){
+          if(!el) return;
+          if(ul&&!ul.err){
+            const v=ul.net||0;
+            el.innerHTML='<div class="ff-single">'
+              +'<div class="ff-single-h"><b>'+escapeHtml(name||ul.name||code)+'</b> 当日主力资金<button type="button" class="ff-qback">回总览</button></div>'
+              +'<div class="fl-sum '+(v>=0?'cls-up':'cls-dn')+'">当日主力净流入：'+(v>=0?'+':'')+fmtMoney(v)+(ul.pct!=null?'　净占比 '+(ul.pct>0?'+':'')+(ul.pct/100).toFixed(2)+'%':'')+'</div>'
+              +'<div class="pan-sub-note">近'+days+'日历史资金流（东方财富）当前网络连不上，已降级显示当日主力资金。可尝试关闭广告拦截插件或更换网络后查看历史。</div>'
+              +'</div>';
+            return;
+          }
+          el.innerHTML='<div class="pan-sub-note">'+escapeHtml(name||code)+' 主力资金流暂连不上（东方财富源）。<button type="button" class="ff-qback">回行业总览</button></div>';
+        });
+        return;
+      }
       const arr=res.days||[]; const dates=res.dates||[];
       const sum=arr.reduce((x,y)=>x+(isNaN(y)?0:y),0);
       const pos=arr.filter(v=>v>0).length, neg=arr.filter(v=>v<0).length;
@@ -560,5 +600,5 @@
 
   window.renderIndustryPanorama=renderIndustryPanorama;
   window.refreshIndustryPanorama=renderIndustryPanorama;
-  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, matchNewsToItems, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, loadClistFlow, matchClistToPool, fundNameOf, buildFundQueryBar, doFundQuery, loadSingleFlow, loadSinaNews, loadThsNews, loadAnyNews, jsonpGet, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
+  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, matchNewsToItems, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, loadClistFlow, matchClistToPool, loadUlistFlow, fundNameOf, buildFundQueryBar, doFundQuery, loadSingleFlow, loadSinaNews, loadThsNews, loadAnyNews, jsonpGet, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
 })();
