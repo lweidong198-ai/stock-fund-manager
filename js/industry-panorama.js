@@ -142,28 +142,72 @@
     return n;
   }
 
-  // 新浪滚动财经新闻（JSONP 绕过 CORS），返回标题数组
+  // ---------- 新闻源（多源自动降级：谁先通就用谁）----------
+  // 通用 JSONP 加载（带 onload/onerror/timeout 兜底，避免某源挂死整块）
+  function jsonpGet(cbName, url, onOk, onErr){
+    let done=false;
+    function finish(fn){ if(done) return; done=true; try{ if(window[cbName]) delete window[cbName]; }catch(e){} fn(); }
+    window[cbName]=function(json){ finish(function(){ onOk(json); }); };
+    const s=document.createElement('script');
+    s.src=url;
+    s.onerror=function(){ finish(function(){ onErr('net'); if(s.parentNode) s.parentNode.removeChild(s); }); };
+    s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
+    document.body.appendChild(s);
+    setTimeout(function(){ finish(function(){ onErr('timeout'); }); }, 9000);
+  }
+
+  // 源1：新浪滚动财经（JSONP，feed.mix.sina.com.cn）。注意：该域名常被广告拦截插件屏蔽 → 失败即降级
   function loadSinaNews(num, cb){
+    const label='新浪财经';
     const cbName='snan'+Math.random().toString(36).slice(2,10);
     const t=Date.now();
     const url='https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&num='+(num||60)+'&page=1&callback='+cbName+'&_='+t;
-    let done=false;
-    function finish(res){ if(done) return; done=true; try{ if(window[cbName]) delete window[cbName]; }catch(e){} cb(res); }
-    window[cbName]=function(json){
-      if(done) return;
-      try{
-        const data=json&&json.result&&json.result.data;
-        if(!data||!data.length){ finish({err:'empty'}); return; }
-        const titles=data.map(d=>(d&&d.title)||'').filter(Boolean);
-        finish({err:null, titles});
-      }catch(e){ finish({err:'parse'}); }
-    };
-    const s=document.createElement('script');
-    s.src=url;
-    s.onerror=function(){ finish({err:'net'}); if(s.parentNode) s.parentNode.removeChild(s); };
-    s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
-    document.body.appendChild(s);
-    setTimeout(function(){ finish({err:'timeout'}); }, 9000);
+    jsonpGet(cbName, url,
+      function(json){
+        try{
+          const data=json&&json.result&&json.result.data;
+          if(!data||!data.length) return cb({err:'empty', label});
+          const titles=data.map(d=>(d&&d.title)||'').filter(Boolean);
+          if(!titles.length) return cb({err:'empty', label});
+          cb({err:null, titles, label});
+        }catch(e){ cb({err:'parse', label}); }
+      },
+      function(){ cb({err:'net', label}); }
+    );
+  }
+
+  // 源2：同花顺快讯（JSONP，news.10jqka.com.cn，ACAO=* 且支持 callback）。不同域名，绕过新浪被屏蔽问题
+  function loadThsNews(num, cb){
+    const label='同花顺快讯';
+    const cbName='thsn'+Math.random().toString(36).slice(2,10);
+    const t=Date.now();
+    const url='https://news.10jqka.com.cn/tapp/news/push/stock/?page=1&tag=&track=website&pagesize=50&callback='+cbName+'&_='+t;
+    jsonpGet(cbName, url,
+      function(json){
+        try{
+          const list=json&&json.data&&json.data.list;
+          if(!list||!list.length) return cb({err:'empty', label});
+          const titles=list.map(d=>(d&&(d.title||d.digest))||'').filter(Boolean);
+          if(!titles.length) return cb({err:'empty', label});
+          cb({err:null, titles, label});
+        }catch(e){ cb({err:'parse', label}); }
+      },
+      function(){ cb({err:'net', label}); }
+    );
+  }
+
+  // 多源降级：依次尝试，第一个返回有效标题的源即采用源，并把源名带回展示
+  const NEWS_SOURCES=[loadSinaNews, loadThsNews];
+  function loadAnyNews(cb){
+    let i=0;
+    (function next(){
+      if(i>=NEWS_SOURCES.length){ cb({err:'allfailed', label:null}); return; }
+      const fn=NEWS_SOURCES[i++];
+      fn(60, function(res){
+        if(res&&!res.err&&res.titles&&res.titles.length) cb(res);
+        else next();
+      });
+    })();
   }
 
   // ---------- 子渲染 ----------
@@ -256,7 +300,7 @@
     el.querySelectorAll('.opp-row').forEach(c=>c.onclick=()=>{ const code=c.dataset.code; if(typeof selectCode==='function') selectCode(code); if(typeof showView==='function') showView('market'); });
   }
 
-  function renderNewsDir(newsDir, err){
+  function renderNewsDir(newsDir, err, srcLabel){
     const el=document.getElementById('panNews'); if(!el) return;
     if(err){ el.innerHTML='<div class="pan-sub-note">新闻源暂不可用（公开源连不上时显示此提示）。方向判断请以「七态+资金走向」为准。</div>'; return; }
     const arr=Object.keys(newsDir).map(c=>({code:c, name:newsDir[c].name, count:newsDir[c].count, dir:newsDir[c].dir, bull:newsDir[c].bull, bear:newsDir[c].bear}))
@@ -268,7 +312,7 @@
       h+='<div class="nd-row"><span class="nd-name">'+escapeHtml(it.name)+'</span>'
         +'<span class="nd-cnt">'+it.count+'条</span>'+arrow(it.dir)+'</div>';
     });
-    h+='</div><div class="pan-sub-note">基于新浪公开新闻标题关键词匹配，粗判方向，仅供参考、不构成建议。</div>';
+    h+='</div><div class="pan-sub-note">新闻来源：'+(srcLabel||'公开源')+'（标题关键词匹配，粗判方向，仅供参考、不构成建议）。</div>';
     el.innerHTML=h;
   }
 
@@ -302,28 +346,28 @@
       renderGlobalBar(rows,true,newsReadyFlag,newsCountVal);
     });
 
-    // 渐进加载：新闻方向（最后一步，完成即标记 _done）
+    // 渐进加载：新闻方向（多源降级，最后一步，完成即标记 _done）
     const markDone=()=>{ _done=true; _busy=false; };
-    if(typeof loadSinaNews==='function'){
-      loadSinaNews(60, res=>{
+    if(typeof loadAnyNews==='function'){
+      loadAnyNews(res=>{
         if(res&&!res.err&&res.titles&&res.titles.length){
           const dir=matchNewsToIndustry(res.titles);
           newsCountVal=Object.keys(dir).length;
-          renderNewsDir(dir,null);
+          renderNewsDir(dir,null,res.label);
           newsReadyFlag=true;
           renderGlobalBar(rows,fundDone,true,newsCountVal);
         } else {
-          renderNewsDir(null,true);
+          renderNewsDir(null,true,null);
           renderGlobalBar(rows,fundDone,true,0);
         }
         markDone();
       });
-    } else { renderNewsDir(null,true); markDone(); }
+    } else { renderNewsDir(null,true,null); markDone(); }
 
     const tt=document.getElementById('homePanoramaTime'); if(tt&&typeof ts==='function') tt.textContent='更新 '+ts();
   }
 
   window.renderIndustryPanorama=renderIndustryPanorama;
   window.refreshIndustryPanorama=renderIndustryPanorama;
-  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
+  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, loadSinaNews, loadThsNews, loadAnyNews, jsonpGet, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
 })();
