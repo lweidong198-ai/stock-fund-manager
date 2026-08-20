@@ -159,6 +159,44 @@
       step();
     });
   }
+  // 东财 clist 行业板块主力净流入（当日，一次请求全行业，比逐只ETF拉更稳、不受并发限流）
+  // 返回 {err, map:{poolCode:{net(元),pct(%),name}}, raw:[{code,name,net,pct}]}
+  function matchClistToPool(bkName, POOL){
+    if(!bkName) return null;
+    const bk=String(bkName);
+    for(const it of POOL){
+      const segs=String(it.name).split('/').map(s=>s.trim()).filter(Boolean);
+      for(const s of segs){ if(s && (bk.indexOf(s)>=0 || s.indexOf(bk)>=0)) return it.code; }
+    }
+    return null;
+  }
+  function loadClistFlow(cb){
+    const cbName='emcl'+Math.random().toString(36).slice(2,10);
+    const POOL=INDUSTRY_POOL.concat((typeof loadCustomSectors==='function')?loadCustomSectors():[]);
+    const url='https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&fs=m:90+t:2&fields=f12,f14,f62,f184&cb='+cbName+'&_='+Date.now();
+    let done=false;
+    function finish(res){ if(done) return; done=true; try{ if(window[cbName]) delete window[cbName]; }catch(e){} cb(res); }
+    window[cbName]=function(json){
+      if(done) return;
+      try{
+        const diff=json&&json.data&&json.data.diff;
+        if(!diff) return finish({err:'empty'});
+        const raw=[]; const map={};
+        Object.keys(diff).forEach(k=>{
+          const d=diff[k]; if(!d) return; const name=d.f14; const net=d.f62; const pct=d.f184;
+          raw.push({code:d.f12, name, net, pct});
+          const pc=matchClistToPool(name, POOL);
+          if(pc && net!=null && map[pc]==null) map[pc]={name:name, net:net, pct:pct};
+        });
+        finish({err:null, raw, map});
+      }catch(e){ finish({err:'parse'}); }
+    };
+    const s=document.createElement('script'); s.src=url;
+    s.onerror=function(){ finish({err:'net'}); if(s.parentNode) s.parentNode.removeChild(s); };
+    s.onload=function(){ if(s.parentNode) s.parentNode.removeChild(s); };
+    document.body.appendChild(s);
+    setTimeout(function(){ finish({err:'timeout'}); }, 9000);
+  }
   // 从最新往前数连续净流入(>0)天数
   function contPos(arr){
     let n=0; for(let i=arr.length-1;i>=0;i--){ if(arr[i]>0) n++; else if(arr[i]<0) break; else break; }
@@ -284,30 +322,40 @@
     el.querySelectorAll('.heat-cell').forEach(c=>c.onclick=()=>{ const code=c.dataset.code; if(typeof selectCode==='function') selectCode(code); if(typeof showView==='function') showView('market'); });
   }
 
-  function renderFundTrend(rows){
+  function renderFundTrend(rows, cl){
     const el=document.getElementById('panFund'); if(!el) return;
-    const known=rows.filter(r=>r._flowDays && !r._flowDays.err && r._flowDays.last!=null);
+    const known=rows.filter(r=>r._flowDays && !r._flowDays.err && r._flowDays.last!=null);   // 近5日(个股, push2his)
+    const clistRows=rows.filter(r=>r._clistNet && r._clistNet.net!=null);                      // 当日(行业板块, clist 主源)
     const rot=rows.filter(r=>r.day!=null).slice().sort((a,b)=>b.day-a.day);
     const lead=rot.slice(0,5), lag=rot.slice(-5).reverse();
     const rowRot=(r)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r.day>=0?'cls-up':'cls-dn')+'">'+(r.day>=0?'+':'')+r.day.toFixed(2)+'%</span></div>';
-    let h='';
-    if(known.length){
-      const sumAll=known.reduce((a,r)=>a+(r._flowDays.sum||0),0);
-      const byToday=known.slice().sort((a,b)=>b._flowDays.last-a._flowDays.last);
-      const topIn=byToday.slice(0,6), topOut=byToday.slice(-6).reverse();
-      const cont=known.filter(r=>r._flowDays.cont>=2).sort((a,b)=>b._flowDays.cont-a._flowDays.cont).slice(0,6);
-      const row=(r,tag)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r._flowDays.last>=0?'cls-up':'cls-dn')+'">'+fmtMoney(r._flowDays.last)+'</span>'+(tag?'<span class="fl-tag">'+tag+'</span>':'')+'</div>';
-      h+='<div class="fl-sum '+(sumAll>=0?'cls-up':'cls-dn')+'">近5日主力净流入合计：'+(sumAll>=0?'+':'')+fmtMoney(sumAll)+'</div>';
-      h+='<div class="fl-block"><div class="fl-h">今日主力净流入 Top6</div>'+topIn.map(r=>row(r)).join('')+'</div>';
-      h+='<div class="fl-block"><div class="fl-h">今日主力净流出 Top6</div>'+topOut.map(r=>row(r)).join('')+'</div>';
-      if(cont.length) h+='<div class="fl-block"><div class="fl-h">资金连续净流入·持续看好</div>'+cont.map(r=>row(r,'连'+r._flowDays.cont+'日')).join('')+'</div>';
+    const rowCl=(r)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r._clistNet.net>=0?'cls-up':'cls-dn')+'">'+fmtMoney(r._clistNet.net)+'</span></div>';
+    const row5=(r,tag)=>'<div class="fl-row"><span class="fl-name">'+escapeHtml(r.name)+'</span><span class="fl-val '+(r._flowDays.last>=0?'cls-up':'cls-dn')+'">'+fmtMoney(r._flowDays.last)+'</span>'+(tag?'<span class="fl-tag">'+tag+'</span>':'')+'</div>';
+    let h=''; let srcNote='';
+    // —— 当日主力净流入（clist 行业板块主源，一次请求即全，最稳）——
+    if(clistRows.length){
+      const sumAll=clistRows.reduce((a,r)=>a+(r._clistNet.net||0),0);
+      const byNet=clistRows.slice().sort((a,b)=>b._clistNet.net-a._clistNet.net);
+      const topIn=byNet.slice(0,6), topOut=byNet.slice(-6).reverse();
+      h+='<div class="fl-sum '+(sumAll>=0?'cls-up':'cls-dn')+'">行业主力净流入合计（当日）：'+(sumAll>=0?'+':'')+fmtMoney(sumAll)+'</div>';
+      h+='<div class="fl-block"><div class="fl-h">今日主力净流入 Top6</div>'+topIn.map(r=>rowCl(r)).join('')+'</div>';
+      h+='<div class="fl-block"><div class="fl-h">今日主力净流出 Top6</div>'+topOut.map(r=>rowCl(r)).join('')+'</div>';
+      srcNote='东方财富·行业板块主力净流入(当日)';
     } else {
-      h+='<div class="pan-sub-note">主力净流入（东方财富）暂连不上，下面用「今日涨跌」展示板块轮动。</div>';
+      h+='<div class="pan-sub-note">行业板块资金流（东方财富）暂连不上，下面用「今日涨跌」展示板块轮动。</div>';
     }
-    // 板块轮动：永远可用（来自今日涨跌 r.day），即使东财源挂了也有信息
+    // —— 近5日主力净流入（push2his 个股，best-effort 增强）——
+    if(known.length){
+      const sum5=known.reduce((a,r)=>a+(r._flowDays.sum||0),0);
+      const cont=known.filter(r=>r._flowDays.cont>=2).sort((a,b)=>b._flowDays.cont-a._flowDays.cont).slice(0,6);
+      h+='<div class="fl-block"><div class="fl-h">近5日主力净流入合计</div><div class="fl-sum '+(sum5>=0?'cls-up':'cls-dn')+'">'+(sum5>=0?'+':'')+fmtMoney(sum5)+'</div></div>';
+      if(cont.length) h+='<div class="fl-block"><div class="fl-h">资金连续净流入·持续看好</div>'+cont.map(r=>row5(r,'连'+r._flowDays.cont+'日')).join('')+'</div>';
+      srcNote+=(srcNote?' + ':'')+'个股近5日';
+    }
+    // —— 板块轮动（本地今日涨跌，永远有信息）——
     h+='<div class="fl-block"><div class="fl-h">板块轮动 · 今日领涨</div>'+(lead.length?lead.map(r=>rowRot(r)).join(''):'<div class="pan-sub-note">暂无</div>')+'</div>';
     h+='<div class="fl-block"><div class="fl-h">板块轮动 · 今日领跌</div>'+(lag.length?lag.map(r=>rowRot(r)).join(''):'<div class="pan-sub-note">暂无</div>')+'</div>';
-    h+='<div class="pan-sub-note">数据：东方财富主力净流入（超大单+大单）+ 今日涨跌轮动；仅供参考、不构成建议。</div>';
+    h+='<div class="pan-sub-note">数据：'+(srcNote||'今日涨跌轮动')+'；仅供参考、不构成建议。</div>';
     el.innerHTML=h;
   }
 
@@ -383,12 +431,16 @@
     renderHeatmap(rows);
     renderOpps(rows);
 
-    // 渐进加载：资金流（近5日，限并发6路防WAF）——全部到位才一次性渲染，不每只重绘
+    // 渐进加载：资金流（近5日 push2his best-effort + 行业板块当日 clist 主源）
     let fundDone=false, newsReadyFlag=false, newsCountVal=0;
     runFundFlows(rows).then(function(){
-      fundDone=true;
-      renderFundTrend(rows);
-      renderGlobalBar(rows,true,newsReadyFlag,newsCountVal);
+      // 近5日就绪后，再拉行业板块当日主力净流入（更稳主源）；clist 挂也不影响板块轮动
+      loadClistFlow(function(cl){
+        rows.forEach(r=>{ if(cl && !cl.err && cl.map && cl.map[r.code]) r._clistNet=cl.map[r.code]; });
+        fundDone=true;
+        renderFundTrend(rows, cl);
+        renderGlobalBar(rows,true,newsReadyFlag,newsCountVal);
+      });
     });
 
     // 渐进加载：新闻方向（多源降级，最后一步，完成即标记 _done）
@@ -415,5 +467,5 @@
 
   window.renderIndustryPanorama=renderIndustryPanorama;
   window.refreshIndustryPanorama=renderIndustryPanorama;
-  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, matchNewsToItems, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, loadSinaNews, loadThsNews, loadAnyNews, jsonpGet, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
+  window.__pan={ PAN_STRENGTH, pricePercentile, matchNewsToIndustry, matchNewsToItems, contPos, newsSentiment, INDUSTRY_KW, heatColor, renderHeatmap, renderFundTrend, renderOpps, renderNewsDir, renderGlobalBar, ffSecid, parseFundFlow, loadClistFlow, matchClistToPool, loadSinaNews, loadThsNews, loadAnyNews, jsonpGet, resetPanorama:()=>{_done=false;}, isPanoramaDone:()=>_done };
 })();
