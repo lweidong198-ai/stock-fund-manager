@@ -273,6 +273,18 @@
   .rank-table th:first-child,.rank-table td:first-child,.rank-table th:nth-child(3),.rank-table td:nth-child(3){text-align:left;}
   .rank-nm{max-width:220px;overflow:hidden;text-overflow:ellipsis;}
   .rank-note{font-size:11.5px;color:var(--sub);margin-bottom:8px;}
+  /* 二期 宏观温度（间接指标） */
+  .mc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;}
+  .mc-card{border:1px solid var(--border);border-radius:10px;background:var(--panel2);padding:12px 14px;font-size:12.5px;line-height:1.7;}
+  .mc-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+  .mc-h b{font-size:14px;}
+  .mc-dir{margin-left:auto;font-weight:700;font-size:12.5px;}
+  .mc-dir.up{color:#2ba75f;} .mc-dir.down{color:#e23b3b;}
+  .mc-now{font-size:13px;margin-bottom:4px;}
+  .mc-extra{font-size:11.5px;color:#d9a514;background:rgba(217,165,20,.08);border-radius:6px;padding:3px 8px;margin-bottom:6px;}
+  .mc-logic{color:var(--sub);font-size:11.5px;}
+  .mc-how{color:var(--sub);font-size:11.5px;border-top:1px dashed var(--border);margin-top:5px;padding-top:5px;}
+  .mc-warn{background:rgba(217,165,20,.1);border:1px solid rgba(217,165,20,.4);color:#d9a514;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;}
   .row-miss{opacity:.55;}
   .row-miss td{color:#999 !important;}
   /* 季度轮动模块 */
@@ -854,6 +866,7 @@
     <div class="navitem nav-watch on" data-view="home">🏠 我的工作台</div>
     <div class="navitem nav-watch" data-view="market">📊 行情看板</div>
     <div class="navitem nav-watch" data-view="asset">🌍 大类资产</div>
+    <div class="navitem nav-watch" data-view="macro">📊 宏观温度</div>
     <div class="navgroup ng-asset"><span class="ng-bar"></span>我的资产</div>
     <div class="navitem nav-asset" data-view="hold">💼 持仓管理</div>
     <div class="navitem nav-asset" data-view="review">📝 每日复盘</div>
@@ -1029,6 +1042,14 @@
             <div class="chartstat" id="mFStat">图表：基金净值</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 宏观温度（二期·间接指标版） -->
+    <div id="viewMacro" class="view" style="display:none;">
+      <div class="card">
+        <h2>📊 宏观温度 <span class="tag">间接指标 · 非官方数据</span> <button class="mini-btn" onclick="renderMacro()">🔄 刷新</button></h2>
+        <div id="macroBody"><div class="sig-load">加载中…</div></div>
       </div>
     </div>
 
@@ -1410,6 +1431,7 @@
   <script src="js/opptrack.js"></script>
   <script src="js/dict.js"></script>
   <script src="js/fundrank.js"></script>
+  <script src="js/macro.js"></script>
   <script src="js/datacenter.js"></script>
   <script src="js/rebalance.js"></script>
   <script src="js/fundanalysis.js"></script>
