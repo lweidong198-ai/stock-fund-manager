@@ -25,7 +25,7 @@ function setNavOn(v){
   document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('on', n.dataset.view===v));
 }
 function showView(v, keepNav){
-  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance'].forEach(x=>{
+  ['home','market','hold','review','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance'].forEach(x=>{
     const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1));
     if(el) el.style.display=(x===v)?((x==='market'||x==='fund'||x==='fundAnalysis')?'grid':'block'):'none';
   });
@@ -33,6 +33,7 @@ function showView(v, keepNav){
   state.view=v;
   if(v==='home') renderHome();
   if(v==='hold') renderHold();
+  if(v==='review' && typeof renderReview==='function') renderReview();
   if(v==='analysis'){ state.anaMode='single'; populateAnSel(); renderAnalysis(); }
 }
 function renderSubTabs(g){
