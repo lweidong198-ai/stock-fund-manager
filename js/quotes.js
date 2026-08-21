@@ -197,6 +197,7 @@ function refreshQuotes(cb){
       // 不能按代码前缀硬除，必须以 K 线（fqkline，单位元）为基准自动对齐。
       Object.keys(d).forEach(c=>{ if(state.quotes[c]) calibrateQuoteToKline(c, state.quotes[c]); });
       setDemo(false); setDataStatus('ok');
+      if(window.Acc) Acc.afterQuotes();   // 准确性基建：行情时间戳+过期检查+多源校验
       done();
     }).catch(err=>{ clearTimeout(t); useDemoQuotes(stockCodes); done(); });
   } else {

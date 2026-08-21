@@ -30,6 +30,7 @@ function applyFundData(code, fd){
   renderWatch(); renderHold();
   if(state.view==='fundAnalysis' && state.faCode===code) renderFundAnalysis();
   setDemo(false); setDataStatus('ok');
+  if(window.Acc) Acc.afterFundData();   // 准确性基建：净值时间戳+东财vs腾讯交叉校验
 }
 function useDemoFund(code){
   const fd=demoFund(code);

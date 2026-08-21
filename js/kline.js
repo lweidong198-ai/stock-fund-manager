@@ -32,6 +32,7 @@ function loadKline(code, period, cb, opt){
       }
     }
     cb(sanitizeKline(v), isDemo);   // 过滤周末等脏数据 bar 后再交给绘图/缓存
+    if(!isDemo && window.Acc) Acc.afterKline();   // 准确性基建：K线时间戳（仅真实数据）
   };
   const tm=setTimeout(()=>fin(demoKline(code, period), true), 15000); // 15秒未返回 → 演示数据（沙箱/慢网络给足时间）
 

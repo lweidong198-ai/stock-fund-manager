@@ -601,6 +601,7 @@
       // 近5日就绪后，再拉行业板块当日主力净流入（更稳主源）；clist 挂也不影响板块轮动
       loadClistFlow(function(cl){
         rows.forEach(r=>{ if(cl && !cl.err && cl.map && cl.map[r.code]) r._clistNet=cl.map[r.code]; });
+        if(window.Acc) Acc.afterFlow();   // 准确性基建：资金流时间戳
         fundDone=true;
         renderFundTrend(rows, cl);
         renderGlobalBar(rows,true,newsReadyFlag,newsCountVal);
