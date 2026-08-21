@@ -230,6 +230,7 @@ function onQuotesUpdated(){ renderWatch();
   if(document.activeElement && document.activeElement.matches && document.activeElement.matches('input[data-ai]')){}
   else renderHold();
   if(state.selected && (state.watch.find(x=>x.code===state.selected)||{}).kind!=='fund') renderDetailHead(); if(state.view==='analysis') renderAnalysis(); if(state.view==='home') renderHome(); refreshKlinesToToday();
+  if(typeof checkHoldAlerts==='function') checkHoldAlerts();   // 止盈止损到点提醒（每天每持仓一次）
   if(window.DataCalibrator){ DataCalibrator.reportQuotes(DataCalibrator.checkQuotes(state.quotes)); if(!state.demo) DataCalibrator.clearFetch(); }
 }
 

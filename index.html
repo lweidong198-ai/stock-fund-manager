@@ -228,6 +228,33 @@
   .review-item summary{cursor:pointer;padding:8px 12px;font-size:12.5px;color:var(--sub);}
   .review-item[open] summary{border-bottom:1px solid var(--border);}
   .review-item .review-card{border:none;background:transparent;}
+  /* 二期 大类资产全景 */
+  .am-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;}
+  @media(max-width:520px){.am-grid{grid-template-columns:1fr 1fr;}}
+  .am-card{border:1px solid var(--border);border-radius:10px;background:var(--panel2);padding:10px 12px;}
+  .am-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .am-h b{font-size:14px;}
+  .am-tag{font-size:10.5px;color:var(--sub);border:1px solid var(--border);border-radius:8px;padding:0 6px;background:var(--panel);}
+  .am-p{margin-left:auto;font-weight:700;font-size:13px;}
+  .am-price{font-size:15px;font-weight:600;margin:4px 0 2px;}
+  .am-tip{font-size:11px;color:var(--sub);line-height:1.5;}
+  .am-kline{font-size:11px;color:var(--sub);margin-top:6px;border-top:1px dashed var(--border);padding-top:5px;}
+  /* 二期 止盈止损到点提醒 */
+  #alertFlash{position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(226,59,59,.92);color:#fff;text-align:center;padding:10px 14px;font-size:14px;font-weight:600;display:none;}
+  #alertFlash.show{display:block;animation:flashPulse 1s ease 3;}
+  @keyframes flashPulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  /* 二期 我的机会 */
+  .mopp-list{display:flex;flex-direction:column;gap:8px;}
+  .mopp-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;background:var(--panel2);padding:10px 12px;}
+  .mopp-row.win{border-color:rgba(217,165,20,.6);background:rgba(217,165,20,.06);}
+  .mopp-main{flex:1;min-width:0;}
+  .mopp-nm{font-size:14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .mopp-badge{background:rgba(217,165,20,.16);border:1px solid rgba(217,165,20,.5);color:#d9a514;border-radius:8px;padding:0 7px;font-size:11px;font-weight:600;}
+  .mopp-p{font-size:12.5px;margin:3px 0;color:var(--txt);}
+  .mopp-lights{font-size:12px;color:var(--sub);}
+  .mopp-d{font-size:11px;color:var(--sub);margin-left:6px;}
+  .mopp-del{flex:0 0 auto;font-size:12px;padding:3px 10px;}
+  .mopp-add{margin-top:14px;display:flex;gap:8px;align-items:center;}
   .row-miss{opacity:.55;}
   .row-miss td{color:#999 !important;}
   /* 季度轮动模块 */
@@ -791,6 +818,7 @@
     </select>
     <button class="ghost" id="btnRefresh">手动刷新</button>
     <button id="btnAuto">自动：开</button>
+    <button class="ghost" id="btnAlertSound" onclick="toggleAlertSound()" title="止盈/止损到点提醒音开关">提醒声：开</button>
   </div>
 </header>
 <div class="idxbar" id="idxBar"></div>
@@ -807,6 +835,7 @@
     <div class="navgroup ng-watch"><span class="ng-bar"></span>看盘</div>
     <div class="navitem nav-watch on" data-view="home">🏠 我的工作台</div>
     <div class="navitem nav-watch" data-view="market">📊 行情看板</div>
+    <div class="navitem nav-watch" data-view="asset">🌍 大类资产</div>
     <div class="navgroup ng-asset"><span class="ng-bar"></span>我的资产</div>
     <div class="navitem nav-asset" data-view="hold">💼 持仓管理</div>
     <div class="navitem nav-asset" data-view="review">📝 每日复盘</div>
@@ -894,7 +923,7 @@
         <div id="detailEmpty" class="empty">← 在左侧自选里点一个，就能看它的实时走势和各类指标。<br>看不懂下面的指标？往下翻有「白话解释」。</div>
         <div id="detail" style="display:none;">
           <div class="detail-head">
-            <span class="big" id="dName">--</span><button class="wl-trend" id="dTrendBtn" title="拉真实行情/K线做走势分析">📈走势</button>
+            <span class="big" id="dName">--</span><button class="wl-trend" id="dTrendBtn" title="拉真实行情/K线做走势分析">📈走势</button><button class="wl-trend" onclick="toggleMyOpp(state.selected)" title="加入/移出「我的机会」跟踪">⭐机会</button>
             <span class="big" id="dPrice">--</span>
             <span id="dChg">--</span>
             <span class="meta" id="dMeta"></span>
@@ -962,7 +991,7 @@
         </div>
         <div id="marketFundDetail" style="display:none;">
           <div class="detail-head">
-            <span class="big" id="mFName">--</span><button class="wl-trend" id="mFTrendBtn" title="拉真实净值做走势分析">📈走势</button>
+            <span class="big" id="mFName">--</span><button class="wl-trend" id="mFTrendBtn" title="拉真实净值做走势分析">📈走势</button><button class="wl-trend" onclick="toggleMyOpp(state.selected)" title="加入/移出「我的机会」跟踪">⭐机会</button>
             <span class="big" id="mFPrice">--</span>
             <span id="mFChg">--</span>
             <span class="meta" id="mFMeta"></span>
@@ -981,6 +1010,15 @@
             <div class="chartstat" id="mFStat">图表：基金净值</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 大类资产全景（二期） -->
+    <div id="viewAsset" class="view" style="display:none;">
+      <div class="card">
+        <h2>🌍 大类资产全景 <span class="tag">看钱往哪去 · 腾讯行情必通</span> <button class="mini-btn" onclick="renderAssetMap()">🔄 刷新</button></h2>
+        <div class="dc-note">黄金 / 债券 / 海外 / 商品 六大类各选一只代表 ETF：今日涨跌 + 近5日/20日走势，帮你感知资金在<b>避险还是进攻</b>。纯行情描述，不构成投资建议。</div>
+        <div id="assetBody"><div class="sig-load">加载中…</div></div>
       </div>
     </div>
 
@@ -1085,6 +1123,16 @@
         <div id="anRisks"></div>
         <div class="masters" id="anMasters"></div>
         <div class="hint">分析依据：实时价格 + 近60天的K线/净值数据，计算均线（MA）、MACD（动能指标）、KDJ、RSI（强弱指标）、布林带后，用多位大师各自的"买不买"逻辑分别判断。<span id="anTime"></span></div>
+      </div>
+    </div>
+
+    <!-- 我的机会（二期·机会发现新增tab） -->
+    <div id="viewMyopp" class="view" style="display:none;">
+      <div class="card">
+        <div class="subtabbar" data-stb="discovery" style="grid-column:1/-1;"></div>
+        <h2>⭐ 我的机会 <span class="tag">自己盯的标的 · 条件满足标黄提醒</span></h2>
+        <div class="dc-note">在行情看板点标的旁的「⭐ 加机会」，把看中的 ETF/股票/基金加进来持续跟踪：现价/涨跌/近20日走势 + 四灯状态；<b>估值灯绿且技术灯绿</b>时标「🎯 机会窗口」提醒。纯描述，不构成建议。</div>
+        <div id="myOppBody"><div class="sig-load">加载中…</div></div>
       </div>
     </div>
 
@@ -1316,6 +1364,9 @@
   <script src="js/industry-panorama.js"></script>
   <script src="js/signals.js"></script>
   <script src="js/review.js"></script>
+  <script src="js/assetmap.js"></script>
+  <script src="js/alert.js"></script>
+  <script src="js/opptrack.js"></script>
   <script src="js/datacenter.js"></script>
   <script src="js/rebalance.js"></script>
   <script src="js/fundanalysis.js"></script>
