@@ -255,6 +255,24 @@
   .mopp-d{font-size:11px;color:var(--sub);margin-left:6px;}
   .mopp-del{flex:0 0 auto;font-size:12px;padding:3px 10px;}
   .mopp-add{margin-top:14px;display:flex;gap:8px;align-items:center;}
+  /* 二期 指标词典 */
+  .dict-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;}
+  .dict-card{border:1px solid var(--border);border-radius:10px;background:var(--panel2);padding:12px 14px;font-size:12.5px;line-height:1.7;}
+  .dict-h{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+  .dict-h b{font-size:14px;}
+  .dict-cat{font-size:10.5px;color:var(--sub);border:1px solid var(--border);border-radius:8px;padding:0 6px;background:var(--panel);}
+  .dict-plain{color:var(--txt);margin-bottom:6px;}
+  .dict-row{color:var(--sub);margin-bottom:3px;}
+  .dict-row .dict-k{display:inline-block;color:var(--accent);font-weight:600;margin-right:6px;}
+  .dict-row.warn .dict-k{color:#d9a514;}
+  /* 二期 基金排行 */
+  .rank-table-wrap{overflow-x:auto;}
+  .rank-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .rank-table th,.rank-table td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;}
+  .rank-table th{color:var(--sub);font-weight:600;font-size:11.5px;background:var(--panel2);text-align:right;}
+  .rank-table th:first-child,.rank-table td:first-child,.rank-table th:nth-child(3),.rank-table td:nth-child(3){text-align:left;}
+  .rank-nm{max-width:220px;overflow:hidden;text-overflow:ellipsis;}
+  .rank-note{font-size:11.5px;color:var(--sub);margin-bottom:8px;}
   .row-miss{opacity:.55;}
   .row-miss td{color:#999 !important;}
   /* 季度轮动模块 */
@@ -846,6 +864,7 @@
     <div class="navgroup ng-tool"><span class="ng-bar"></span>数据工具</div>
     <div class="navitem nav-tool" data-view="datacenter">🧮 可靠数据中心</div>
     <div class="navitem nav-tool" data-view="rebalance">📐 调仓频率实验室</div>
+    <div class="navitem nav-tool" data-view="dict">📖 指标词典</div>
     <div class="navfoot">点自选行→行情页看K线/净值；想看「大师怎么看这只」在「择时建仓」里点「建仓打分」；给基金做体检在「机会发现」里点「基金体检」。<br><a href="javascript:void(0)" onclick="showView('datacenter')">🧮 可靠数据中心（数据来源说明）</a></div>
   </nav>
 
@@ -1057,6 +1076,19 @@
       </div>
     </div>
 
+    <!-- 指标词典（二期） -->
+    <div id="viewDict" class="view" style="display:none;">
+      <div class="card">
+        <h2>📖 指标词典 <span class="tag">大白话 · 是什么/怎么用/别踩坑</span></h2>
+        <div class="row" style="margin-bottom:12px;">
+          <input id="dictSearch" class="add-input" placeholder="搜索：KDJ / 回撤 / 分位…" style="flex:1;min-width:140px;" oninput="renderDict()" />
+          <select id="dictCat" onchange="renderDict()"></select>
+        </div>
+        <div id="dictBody"><div class="sig-load">词典加载中…</div></div>
+        <div class="dc-note" style="margin-top:12px;">全部为科普解释，帮助你读懂工作台里的数字，不构成任何投资建议。</div>
+      </div>
+    </div>
+
     <!-- 基金净值 -->
     <div id="viewFund" class="view fund-page" style="display:none;">
       <div class="fund-side">
@@ -1133,6 +1165,15 @@
         <h2>⭐ 我的机会 <span class="tag">自己盯的标的 · 条件满足标黄提醒</span></h2>
         <div class="dc-note">在行情看板点标的旁的「⭐ 加机会」，把看中的 ETF/股票/基金加进来持续跟踪：现价/涨跌/近20日走势 + 四灯状态；<b>估值灯绿且技术灯绿</b>时标「🎯 机会窗口」提醒。纯描述，不构成建议。</div>
         <div id="myOppBody"><div class="sig-load">加载中…</div></div>
+      </div>
+    </div>
+
+    <!-- 基金排行（二期·机会发现新增tab） -->
+    <div id="viewFundRank" class="view" style="display:none;">
+      <div class="card">
+        <div class="subtabbar" data-stb="discovery" style="grid-column:1/-1;"></div>
+        <h2>🏆 基金排行 <span class="tag">近1年涨幅降序 · 东方财富</span> <button class="mini-btn" onclick="renderFundRank()">🔄 刷新</button></h2>
+        <div id="rankBody"><div class="sig-load">加载中…</div></div>
       </div>
     </div>
 
@@ -1367,6 +1408,8 @@
   <script src="js/assetmap.js"></script>
   <script src="js/alert.js"></script>
   <script src="js/opptrack.js"></script>
+  <script src="js/dict.js"></script>
+  <script src="js/fundrank.js"></script>
   <script src="js/datacenter.js"></script>
   <script src="js/rebalance.js"></script>
   <script src="js/fundanalysis.js"></script>

@@ -11,7 +11,8 @@ const VIEW_GROUPS = {
   discovery: { tabs:[
     {key:'fund', disp:'grid', render:renderOpportunities},
     {key:'fundAnalysis', disp:'grid', render:renderFundAnalysis},
-    {key:'myopp', disp:'block', render:renderMyOpps}
+    {key:'myopp', disp:'block', render:renderMyOpps},
+    {key:'fundRank', disp:'block', render:renderFundRank}
   ], def:'fund' },
   radar: { tabs:[
     {key:'sectors', disp:'block', render:renderSectors},
@@ -26,7 +27,7 @@ function setNavOn(v){
   document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('on', n.dataset.view===v));
 }
 function showView(v, keepNav){
-  ['home','market','asset','hold','review','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance'].forEach(x=>{
+  ['home','market','asset','hold','review','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance','dict'].forEach(x=>{
     const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1));
     if(el) el.style.display=(x===v)?((x==='market'||x==='fund'||x==='fundAnalysis')?'grid':'block'):'none';
   });
@@ -36,12 +37,13 @@ function showView(v, keepNav){
   if(v==='hold') renderHold();
   if(v==='review' && typeof renderReview==='function') renderReview();
   if(v==='asset' && typeof renderAssetMap==='function') renderAssetMap();
+  if(v==='dict'){ if(typeof renderDictCatSel==='function') renderDictCatSel(); if(typeof renderDict==='function') renderDict(); }
   if(v==='analysis'){ state.anaMode='single'; populateAnSel(); renderAnalysis(); }
 }
 function renderSubTabs(g){
   const cfg=VIEW_GROUPS[g];
   const cur=(state.subView&&state.subView[g])||cfg.def;
-  const labels={fund:'本期精选',fundAnalysis:'基金体检',myopp:'我的机会',sectors:'趋势方向',rotation:'冷热排行',analysis:'建仓打分',flow:'资金流向'};
+  const labels={fund:'本期精选',fundAnalysis:'基金体检',myopp:'我的机会',fundRank:'基金排行',sectors:'趋势方向',rotation:'冷热排行',analysis:'建仓打分',flow:'资金流向'};
   document.querySelectorAll('[data-stb="'+g+'"]').forEach(bar=>{
     bar.innerHTML = cfg.tabs.map(t=>'<span class="stab'+(t.key===cur?' on':'')+'" onclick="showSub(\''+g+'\',\''+t.key+'\')">'+(labels[t.key]||t.key)+'</span>').join('');
   });
