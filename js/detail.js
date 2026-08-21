@@ -38,7 +38,9 @@ function renderDetail(){
   // 立即绘制（不依赖 requestAnimationFrame，避免某些浏览器/环境下回调不触发导致空白）
   const drawNow=(data)=>{ try{ state.kcache[key]=data; ensureTodayBar(code, state.period); markKlineDate(data); chartStat('图表：K线已加载，绘制中…', null); // K线到位后立即校准行情价格单位（ETF 行情“分/元”不统一）
       if(state.quotes[code]) calibrateQuoteToKline(code, state.quotes[code]);
-      drawAll(data); }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
+      drawAll(data);
+      if(typeof renderSignalLights==='function') renderSignalLights('dSignal', code);   // 一期③ 信号灯：K线到位后计算四灯
+    }catch(e){ chartStat('图表绘制出错：'+(e&&e.message?e.message:e), 'err'); } };
   if(kl && kl.length){
     if(kl._demo) $('dHint').innerHTML='当前为演示K线（行情接口暂未返回真实数据）<a href="#" onclick="refreshKline();return false;">重试</a>';
     else $('dHint').innerHTML='指标由K线即时计算 · 红涨绿跌（A股习惯） · 可拖拽/滚轮缩放';
@@ -202,6 +204,7 @@ function showMarketFund(code){
       .map(([c,n])=>`<span class="etf-jump" onclick="addWatch('${c}')">${n}</span>`).join('');
     $('mFStat').textContent='场外基金净值·当前环境不可达（可看场内ETF走势）';
     paintCanvasMsg('mFundNav','场外基金净值\n当前环境不可访问\n\n点击下方场内ETF\n可直接看K线走势', '#999');
+    const mfs1=$('mFSignal'); if(mfs1) mfs1.innerHTML='<div class="sig-load">⚪ 净值源不可达，信号灯无法计算（本机双击 index.html 可用）</div>';
     return;
   }
   const fd=state.fundData[code];
@@ -214,6 +217,7 @@ function showMarketFund(code){
     $('mFTime').textContent=fd.nav.length? '截至 '+new Date(fd.nav[fd.nav.length-1].t).toLocaleDateString('zh-CN'):'';
     drawNav('mFundNav', fd);
     $('mFHint').textContent='累计净值：'+fmt(fd.cum.length?fd.cum[fd.cum.length-1].nav:0,4)+' · 共 '+fd.nav.length+' 条净值记录';
+    if(typeof renderSignalLights==='function') renderSignalLights('mFSignal', code);   // 一期③ 基金信号灯（净值版）
     return;
   }
   // ③ 加载中（等待东方财富返回；不可达时由 fundFail 分支接管）
