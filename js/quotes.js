@@ -175,12 +175,49 @@ function renderHome(){
     const rc2='<div class="rc-card verified"><h3>经真实验证的策略</h3><div class="rc-line">机会精选·基金版<br>半年维度 IC <b>+0.099</b>（t=4.34）</div><div class="rc-sub">1958只基金·155个时点样本外；行业ETF旧模型已因反向下线</div></div>';
     rg.innerHTML=rc1+rc2;
   }
-  // 3) 快捷入口
-  const mods=[{v:'market',i:'📊',t:'行情看板',d:'K线+五档盘口+各类指标'},{v:'hold',i:'💼',t:'持仓管理',d:'成本录入·盈亏自动算'},{v:'fund',i:'🔍',t:'机会精选',d:'主动基金·半年维度筛选'},{v:'analysis',i:'🧠',t:'建仓分析',d:'集合大师思维框架研判'},{v:'sectors',i:'🌐',t:'行业趋势扫描',d:'哪个行业在向上'},{v:'fundAnalysis',i:'📈',t:'基金深度分析',d:'净值诊断·风险体检'},{v:'rotation',i:'🌡️',t:'行业温度计',d:'只看冷热·不构成推荐'},{v:'datacenter',i:'🧮',t:'可靠数据中心',d:'质量/估值/分散/定投'}];
+  // 3) 快捷入口（彩色渐变卡，借鉴 Landray 风格）
+  const mods=[{v:'market',i:'📊',t:'行情看板',d:'K线+五档盘口+各类指标',g:'blue'},{v:'hold',i:'💼',t:'持仓管理',d:'成本录入·盈亏自动算',g:'green'},{v:'fund',i:'🔍',t:'机会精选',d:'主动基金·半年维度筛选',g:'purple'},{v:'analysis',i:'🧠',t:'建仓分析',d:'集合大师思维框架研判',g:'orange'},{v:'sectors',i:'🌐',t:'行业趋势扫描',d:'哪个行业在向上',g:'cyan'},{v:'fundAnalysis',i:'📈',t:'基金深度分析',d:'净值诊断·风险体检',g:'pink'},{v:'rotation',i:'🌡️',t:'行业温度计',d:'只看冷热·不构成推荐',g:'orange'},{v:'datacenter',i:'🧮',t:'可靠数据中心',d:'质量/估值/分散/定投',g:'cyan'}];
   const mg=$('homeMods');
-  if(mg){ mg.innerHTML=mods.map(m=>'<div class="modcard" data-go="'+m.v+'"><div class="mi">'+m.i+'</div><div class="mt">'+m.t+'</div><div class="md">'+m.d+'</div></div>').join(''); mg.querySelectorAll('.modcard').forEach(c=>c.onclick=()=>goView(c.dataset.go)); }
+  if(mg){ mg.innerHTML=mods.map(m=>'<div class="modcard mod-'+m.g+'" data-go="'+m.v+'"><div class="mi">'+m.i+'</div><div class="mt">'+m.t+'</div><div class="md">'+m.d+'</div></div>').join(''); mg.querySelectorAll('.modcard').forEach(c=>c.onclick=()=>goView(c.dataset.go)); }
+  // 3.5) 今日要点侧栏
+  if(typeof renderHomeDigest==='function'){ try{ renderHomeDigest(); }catch(e){ console.warn('renderHomeDigest err', e); } }
   // 4) 行业全景聚合面板（进入工作台即自动拉取；失败/限流时内部诚实降级）
   if(typeof renderIndustryPanorama==='function') renderIndustryPanorama();
+}
+
+/* 首页「今日要点」侧栏：今日盈亏 / 到点提醒 / 复盘生成 / 持仓集中度 */
+function renderHomeDigest(){
+  const el=$('homeDigestBody'); if(!el) return;
+  const items=[];
+  // 今日盈亏
+  let mv=0, day=0;
+  state.hold.forEach(h=>{ const q=state.quotes[h.code]; const fd=state.fundData[h.code]; const cur=q?q.price:(fd?fd.latest:0); if(cur){ mv+=cur*h.shares; if(h.kind==='fund'){ if(fd&&fd.prev) day+=h.shares*(fd.latest-fd.prev); } else { if(q&&q.changePct!=null) day+=cur*h.shares*q.changePct/(100+q.changePct); } } });
+  if(state.hold.length){
+    items.push({ic:'💹', cls:day>=0?'dg-ok':'dg-alert', tx:'今日盈亏 <b class="'+(cls(day))+'">'+fmt(day)+'</b>'});
+  } else {
+    items.push({ic:'💹', cls:'dg-info', tx:'暂无持仓，去「持仓管理」录入'});
+  }
+  // 到点提醒（止盈/止损）
+  let hit=0;
+  state.hold.forEach(h=>{ const p=(typeof priceOf==='function')?priceOf(h.code):0; if(!(p>0)) return;
+    if(h.target>0 && p>=h.target) hit++;
+    else if(h.stop>0 && p<=h.stop) hit++;
+  });
+  if(hit>0) items.push({ic:'🔔', cls:'dg-alert', tx:'<b>'+hit+'</b> 只持仓到止盈/破止损价，注意纪律'});
+  else items.push({ic:'🔔', cls:'dg-ok', tx:'今日无持仓触发止盈/止损线'});
+  // 复盘生成
+  let reviewed=false;
+  try{ const arr=JSON.parse(localStorage.getItem('reviewArchive')||'[]'); const td=(typeof todayStr==='function')?todayStr():''; reviewed=arr.some(r=>r.date===td); }catch(e){}
+  if(reviewed) items.push({ic:'📝', cls:'dg-ok', tx:'今日复盘已生成，可回看'});
+  else items.push({ic:'📝', cls:'dg-warn', tx:'今日复盘未生成，收盘后可点「每日复盘」'});
+  // 持仓集中度
+  if(state.hold.length){
+    let tot=0; const ms=state.hold.map(h=>{ const p=(typeof priceOf==='function')?priceOf(h.code):0; const m=p*h.shares; tot+=m; return m; });
+    const maxPct=tot?Math.max.apply(null,ms)/tot*100:0;
+    const cv=(maxPct>60)?'dg-alert':(maxPct>40?'dg-warn':'dg-ok');
+    items.push({ic:'🎯', cls:cv, tx:'最大持仓占比 <b>'+maxPct.toFixed(0)+'%</b>'+(maxPct>40?'（偏集中）':'（较分散）')});
+  }
+  el.innerHTML=items.map(it=>'<div class="dg-item '+it.cls+'"><span class="dg-ic">'+it.ic+'</span><span class="dg-tx">'+it.tx+'</span></div>').join('');
 }
 
 function refreshQuotes(cb){
