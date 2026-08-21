@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>钱管家工作台 v1.0 · 需求蓝图</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1d2537; --border:#2a3550;
+    --text:#e8ecf4; --sub:#8b95ab; --accent:#5b8cff; --green:#26a269; --red:#e5484d;
+    --yellow:#d9a514;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:"Microsoft YaHei","PingFang SC",sans-serif;line-height:1.7;padding:28px 16px 60px;}
+  .wrap{max-width:960px;margin:0 auto;}
+  header{text-align:center;margin-bottom:30px;}
+  .logo{display:inline-block;background:linear-gradient(135deg,#5b8cff,#8b5bff);color:#fff;font-size:13px;font-weight:600;border-radius:20px;padding:4px 14px;margin-bottom:14px;letter-spacing:1px;}
+  h1{font-size:26px;font-weight:700;margin-bottom:6px;}
+  .sub{color:var(--sub);font-size:14px;}
+  .ver{display:inline-block;margin-top:10px;font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:12px;padding:2px 10px;}
+  section{margin-bottom:26px;}
+  h2{font-size:17px;font-weight:700;margin-bottom:12px;padding-left:10px;border-left:4px solid var(--accent);}
+  h2 .tag{font-size:11px;color:var(--sub);font-weight:400;margin-left:8px;letter-spacing:1px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:12px;}
+  .card h3{font-size:15px;margin-bottom:8px;}
+  .card h3 .no{color:var(--accent);margin-right:6px;}
+  .card p{color:var(--sub);font-size:13.5px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:700px){.grid2{grid-template-columns:1fr;}}
+  .pill{display:inline-block;font-size:11.5px;border-radius:10px;padding:2px 10px;margin:2px 4px 2px 0;border:1px solid var(--border);background:var(--panel2);color:var(--sub);}
+  .pill.g{color:var(--green);border-color:rgba(38,162,105,.45);}
+  .pill.r{color:var(--red);border-color:rgba(229,72,77,.45);}
+  .pill.y{color:var(--yellow);border-color:rgba(217,165,20,.45);}
+  .pill.a{color:var(--accent);border-color:rgba(91,140,255,.45);}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;}
+  th{color:var(--sub);font-weight:600;font-size:12.5px;background:var(--panel2);}
+  td:first-child{white-space:nowrap;font-weight:600;}
+  .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;}
+  .step{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;}
+  .arrow{color:var(--sub);}
+  .note{font-size:12.5px;color:var(--sub);background:rgba(217,165,20,.08);border:1px solid rgba(217,165,20,.3);border-radius:8px;padding:10px 14px;margin-top:10px;}
+  footer{text-align:center;color:var(--sub);font-size:12px;margin-top:40px;border-top:1px solid var(--border);padding-top:16px;}
+  .ok{color:var(--green);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo">阿布 · 需求收官</div>
+  <h1>钱管家工作台</h1>
+  <div class="sub">个人投资理财工作台 · 基金 / ETF / 股票混合持仓统一管理 + 决策辅助 + 复盘</div>
+  <div class="ver">v1.0 · 正式第一版 · 2026-08-21 需求收官</div>
+</header>
+
+<section>
+  <h2>一、定位与原则<span class="tag">WHY</span></h2>
+  <div class="card">
+    <p>在现有 stock-fund-manager 工作台上<b>迭代升级，不重做</b>。核心解决三件事：<b>不知道何时买卖</b>（择时）、<b>数据不会解读</b>（知识）、<b>情绪化拿不住</b>（纪律）。</p>
+    <p style="margin-top:10px;">铁律：大白话 · 零 API Key · 零门槛 · 描述式不预测 · 准确性第一 · 数据仅供参考不构成建议。</p>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>使用场景</h3><p><span class="pill">盘中实时盯盘</span><span class="pill">买卖决策时刻</span><span class="pill">收盘后复盘</span><span class="pill">定期例行回顾</span></p></div>
+    <div class="card"><h3>使用设备</h3><p><span class="pill a">电脑 + 手机都要</span><span class="pill">移动优先 · 桌面清晰</span></p></div>
+  </div>
+</section>
+
+<section>
+  <h2>二、一期四件套<span class="tag">CORE</span></h2>
+  <div class="card">
+    <h3><span class="no">①</span>准确性基建 <span class="pill a">基础 · 先行</span></h3>
+    <table>
+      <tr><th>能力</th><th>说明</th></tr>
+      <tr><td>多源交叉校验</td><td>关键数据两个源对比，差异大时标黄提醒</td></tr>
+      <tr><td>数据时间戳</td><td>每块数据标注「更新于 HH:MM:SS」，一眼知道新旧</td></tr>
+      <tr><td>延迟规则说明</td><td>实时行情 / 资金流 / 基金净值各自的延迟规则写清楚</td></tr>
+      <tr><td>过期自动警告</td><td>盘中数据停更超时自动标黄警告</td></tr>
+      <tr><td>断源自动降级</td><td>主源挂自动换备源并标注，无源才诚实提示</td></tr>
+      <tr><td>风险提示</td><td>页脚常驻「数据仅供参考，不构成投资建议」</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3><span class="no">②</span>统一持仓总览 <span class="pill a">默认首页</span></h3>
+    <table>
+      <tr><th>能力</th><th>说明</th></tr>
+      <tr><td>三类资产一张表</td><td>场外基金（输份额）/ 场内ETF（输股数+成本）/ 股票</td></tr>
+      <tr><td>自动盈亏</td><td>总市值 · 总盈亏 · 仓位分布 · 各持仓盈亏</td></tr>
+      <tr><td>止盈止损线</td><td>成本线 / 止盈线 / 止损线，012863 那套通用化到所有持仓</td></tr>
+      <tr><td>手动录入</td><td>买入 / 加仓时手动填一笔（名称 / 份额 / 成本 / 日期）</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3><span class="no">③</span>多维信号灯 + 买卖检查清单 <span class="pill a">解决择时+情绪</span></h3>
+    <table>
+      <tr><th>灯</th><th>条件</th><th>绿 / 红</th></tr>
+      <tr><td>估值灯</td><td>价格历史分位</td><td><span class="pill g">分位 &lt;30% 便宜</span><span class="pill r">分位 &gt;70% 贵</span></td></tr>
+      <tr><td>资金灯</td><td>近5日主力净流入</td><td><span class="pill g">连续净流入</span><span class="pill r">连续净流出</span></td></tr>
+      <tr><td>技术灯</td><td>20日线 + MACD</td><td><span class="pill g">站上20日线且金叉</span><span class="pill r">破位或死叉</span></td></tr>
+      <tr><td>趋势灯</td><td>相对全行业超额收益</td><td><span class="pill g">超额为正</span><span class="pill r">超额为负</span></td></tr>
+    </table>
+    <p style="margin-top:8px;">点「想买 / 想卖」弹检查清单，逐条确认（估值贵吗 / 资金在流入吗 / 是追高吗），确认完才放行。</p>
+  </div>
+  <div class="card">
+    <h3><span class="no">④</span>一键复盘 + 每日自动摘要</h3>
+    <table>
+      <tr><th>能力</th><th>说明</th></tr>
+      <tr><td>一键复盘卡</td><td>大盘涨跌 · 资金动向 · 持仓变动 · 机会池变化</td></tr>
+      <tr><td>每日自动摘要</td><td>收盘自动生成当日摘要，存本地 30 天可回看</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>三、二期扩展<span class="tag">NEXT · 一期验收后再动</span></h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>宏观数据（尽力而为+诚实标注）</h3>
+      <p><span class="pill">利率</span><span class="pill">物价</span><span class="pill">货币</span><span class="pill">经济景气</span></p>
+      <p style="margin-top:6px;">拿不到的源诚实标注「暂不支持」+ 给替代建议，不硬凑。</p>
+    </div>
+    <div class="card">
+      <h3>大类资产全景（6 只，全腾讯行情必通）</h3>
+      <p><span class="pill">黄金 518880</span><span class="pill">十年国债 511260</span><span class="pill">纳指 513100</span><span class="pill">恒生 159920</span><span class="pill">原油 501018</span><span class="pill">有色 512400</span></p>
+    </div>
+    <div class="card">
+      <h3>基金排行筛选</h3>
+      <p>按收益 / 回撤 / 规模 / 费率筛基金，挑基金用。</p>
+    </div>
+    <div class="card">
+      <h3>机会发现增强</h3>
+      <p><span class="pill a">「我的机会」跟踪</span><span class="pill a">条件满足自动标黄提醒</span></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>四、产品形态<span class="tag">FORM</span></h2>
+  <div class="card">
+    <table>
+      <tr><th>项</th><th>决定</th></tr>
+      <tr><td>部署</td><td>三端都要：本地双击 + GitHub Pages + CloudStudio</td></tr>
+      <tr><td>数据持久化</td><td>localStorage 自动存 + 一键导出 / 导入 JSON 备份</td></tr>
+      <tr><td>布局</td><td>移动优先 + 桌面清晰，一套代码两端好用</td></tr>
+      <tr><td>默认首页</td><td>统一持仓总览</td></tr>
+      <tr><td>刷新</td><td>盘中自动刷新 + 手动强刷按钮</td></tr>
+      <tr><td>提醒</td><td>页面内角标/红点 + 声音闪烁</td></tr>
+      <tr><td>知识层</td><td>白话解读 + 买卖决策卡 + 指标词典</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>五、数据源与准确性策略<span class="tag">SOURCE</span></h2>
+  <div class="card">
+    <table>
+      <tr><th>数据</th><th>主源</th><th>备源/降级</th></tr>
+      <tr><td>实时行情</td><td>腾讯 qt.gtimg.cn（必通）</td><td>新浪 / 东财（尽力）</td></tr>
+      <tr><td>K线</td><td>腾讯 fqkline</td><td>新浪 JSONP（未复权，极端降级）</td></tr>
+      <tr><td>资金流</td><td>东财 daykline（历史N日）</td><td>ulist 当日 → 腾讯行情兜底</td></tr>
+      <tr><td>基金净值</td><td>东财 pingzhongdata</td><td>多源校验 + 延迟规则说明</td></tr>
+    </table>
+    <div class="note">ⓘ 统计呈现维持「描述式 + 诚实披露」：显示历史统计 + 样本量 + 局限说明，不预测、不构成投资建议。所有统计信号仅是「相对强弱筛子」，不是精确预言机。</div>
+  </div>
+</section>
+
+<section>
+  <h2>六、交付节奏<span class="tag">SHIP</span></h2>
+  <div class="card">
+    <div class="flow">
+      <span class="step">准确性基建</span><span class="arrow">→</span>
+      <span class="step">统一持仓总览</span><span class="arrow">→</span>
+      <span class="step">信号灯+检查清单</span><span class="arrow">→</span>
+      <span class="step">复盘+摘要</span>
+    </div>
+    <p style="margin-top:10px;">按依赖关系排序：<b>准确性基建</b>是所有模块的地基先做；<b>持仓总览</b>是默认首页、最痛点第二做；<b>信号灯</b>依赖估值/资金/技术数据第三做；<b>复盘摘要</b>依赖前两者最后做。</p>
+    <p style="margin-top:6px;"><span class="ok">✓</span> 一件一验：每做完一件部署给你点，可随时叫停。每版改完跑五层测试（含 jsdom 实跑）才交付。</p>
+  </div>
+</section>
+
+<footer>
+  <div>钱管家工作台 v1.0 需求蓝图 · 2026-08-21 九轮问答定稿</div>
+  <div style="margin-top:6px;">数据仅供参考，不构成投资建议 · 投资有风险，入市需谨慎</div>
+</footer>
+
+</div>
+</body>
+</html>
