@@ -173,6 +173,18 @@
   .app-footer .dn-sep{margin:0 7px;color:var(--border);}
   .app-footer .af-rule{opacity:.8;}
   .app-footer .af-risk{color:#d9a514;font-weight:500;margin-top:2px;}
+  /* 一期② 统一持仓总览：仓位分布 + 首页持仓表 */
+  .alloc-grid{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;}
+  .alloc-left{flex:0 0 auto;width:100%;max-width:380px;}
+  .alloc-right{flex:1 1 260px;min-width:260px;overflow-x:auto;}
+  .hh-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .hh-table th,.hh-table td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+  .hh-table th{color:var(--sub);font-weight:600;font-size:12px;background:var(--panel2);}
+  .hh-code{font-size:11px;color:var(--sub);}
+  .hh-badge{display:inline-block;background:rgba(226,59,59,.14);border:1px solid rgba(226,59,59,.5);color:#e23b3b;border-radius:8px;padding:1px 8px;font-size:11px;font-weight:600;white-space:nowrap;}
+  .hh-ok{color:var(--sub);}
+  .alloc-wrap{margin:10px 0 14px;}
+  .alloc-h{font-size:13px;margin:0 0 6px;color:var(--txt);}
   .row-miss{opacity:.55;}
   .row-miss td{color:#999 !important;}
   /* 季度轮动模块 */
@@ -774,6 +786,13 @@
           <h2>💼 我的资产速览 <span class="tag">自动计算</span></h2>
           <div class="overview-grid" id="homeAsset"></div>
         </div>
+        <div class="card" id="homeHoldCard">
+          <h2>📦 持仓总览 <span class="tag">市值 · 收益率 · 仓位分布 · 止盈止损状态</span> <button class="mini-btn" onclick="goView('hold')">去持仓管理 →</button></h2>
+          <div class="alloc-grid">
+            <div class="alloc-left"><canvas id="homeAllocCv" height="220" style="width:100%;max-width:380px;display:block;"></canvas></div>
+            <div class="alloc-right"><table class="hh-table"><thead><tr><th>名称</th><th>市值</th><th>收益率</th><th>仓位占比</th><th>状态</th></tr></thead><tbody id="homeHoldBody"></tbody></table></div>
+          </div>
+        </div>
         <div class="card">
           <h2>🧭 当前市况与策略结论 <span class="tag">已样本外验证</span></h2>
           <div class="regime-concl" id="homeRegime"></div>
@@ -928,6 +947,10 @@
           <input id="fileImport" type="file" accept="application/json" style="display:none;" />
         </div>
         <div class="summary" id="holdSummary"></div>
+        <div class="alloc-wrap" id="holdAllocWrap" style="display:none;">
+          <h3 class="alloc-h">📊 仓位分布 <span class="tag">按持仓市值占比</span></h3>
+          <canvas id="holdAllocCv" height="220" style="width:100%;max-width:420px;display:block;"></canvas>
+        </div>
         <div class="explain">📘 <b>怎么读</b>：市值 = 现在这些持仓总共值多少钱；浮动盈亏 = 按现价卖出能赚/亏多少；<b>收益率</b> = (现价−成本价)÷成本价，正数是赚、负数是亏。<b>输入代码自动识别股票/基金</b>，填数量和买入成本价，点「加持仓」即可。<b>持仓与自选互相独立</b>——不必先加自选，删自选也不影响持仓。<b>一键加减仓</b>：每只持仓行的「加仓/减仓」列填<b>金额</b>、点按钮即按<b>当前现价/净值</b>算股数（股票取整到 100 股/手、基金留小数）；<b>加仓加权更新成本价</b>，<b>减仓不改变剩余持仓成本、只显示本次实现盈亏</b>。买入/卖出价取当前行情价、非真实成交价，仅供参考、不构成建议。<b style="color:#c0392b">提醒：数据只存在你当前这个浏览器网址里，换设备/清缓存/开无痕都会丢，建议偶尔点「导出备份」存个 json 文件。</b></div>
         <div id="holdBox"></div>
       </div>

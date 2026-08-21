@@ -156,6 +156,8 @@ function renderHome(){
       +'<div class="ov-card"><span class="ov-icon">🔄</span><div class="ov-info"><span class="ov-v '+(cls(day))+'">'+fmt(day)+'</span><span class="ov-k">今日盈亏</span></div></div>'
       +'<div class="ov-card"><span class="ov-icon">📊</span><div class="ov-info"><span class="ov-v">'+state.hold.length+' / '+state.watch.length+'</span><span class="ov-k">持仓 / 自选</span></div></div>';
   }
+  // 1.5) 持仓总览（市值/收益率/仓位分布/止盈止损状态）—— 默认首页核心
+  if(typeof renderHomeHold==='function'){ try{ renderHomeHold(); }catch(e){ console.warn('renderHomeHold err', e); } }
   // 2) 市况与策略结论
   const rg=$('homeRegime');
   if(rg){

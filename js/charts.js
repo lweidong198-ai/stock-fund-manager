@@ -260,3 +260,76 @@ function drawNav(canvasId, fd){
   }
 }
 
+
+/* ============ 仓位分布（一期② 统一持仓总览） ============ */
+/* 持仓按市值占比排序（供环形图/总览表共用），纯数据、便于单测 */
+function allocData(){
+  if(typeof state==='undefined'||!state||!state.hold||!state.hold.length) return [];
+  const rows=[]; let tot=0;
+  state.hold.forEach(h=>{
+    const p=typeof priceOf==='function'?priceOf(h.code):0;
+    const mv=(h.shares||0)*p;
+    if(!(mv>0)) return;
+    rows.push({code:h.code, name:typeof nameOf==='function'?nameOf(h.code):h.code, mv:mv, kind:(typeof isFundKind==='function'&&isFundKind(h.code))?'fund':'stock'});
+    tot+=mv;
+  });
+  rows.forEach(r=>{ r.pct=tot?r.mv/tot*100:0; });
+  return rows.sort((a,b)=>b.mv-a.mv);
+}
+/* 环形图：中心显示总市值，右侧图例=名称+占比。无持仓→画提示文字。 */
+function drawAlloc(canvasId){
+  const cv=$(canvasId); if(!cv) return;
+  const ctx=cv.getContext&&cv.getContext('2d'); if(!ctx){ return; }
+  const rows=allocData();
+  const w=cv.clientWidth||300, h=cv.clientHeight||parseInt(cv.getAttribute('height'))||220;
+  ctx.clearRect(0,0,w,h);
+  if(!rows.length){ paintCanvasMsg(canvasId,'暂无持仓','#8b95ab'); return; }
+  const cx=Math.round(w*0.30), cy=Math.round(h/2), R=Math.max(30,Math.min(h/2-18, w*0.26)), r=R*0.62;
+  const PAL=['#5b8cff','#26a269','#e5484d','#d9a514','#8b5bff','#2aa8a0','#e07a3f','#7f9fd0','#c0559b','#5fbf5f'];
+  let a0=-Math.PI/2;
+  rows.forEach((row,i)=>{
+    const sweep=row.pct/100*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0,a0+sweep); ctx.closePath();
+    ctx.fillStyle=PAL[i%PAL.length]; ctx.fill();
+    ctx.strokeStyle='#0f1420'; ctx.lineWidth=2; ctx.stroke();
+    a0+=sweep;
+  });
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle='#171e2e'; ctx.fill();
+  ctx.fillStyle='#8b95ab'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('总市值',cx,cy-10);
+  ctx.fillStyle='#e8ecf4'; ctx.font='bold 12px sans-serif';
+  ctx.fillText(fmt(rows.reduce((s,x)=>s+x.mv,0),0),cx,cy+8);
+  const lx=w*0.56, ly0=Math.max(16, cy-Math.min(rows.length,14)*8);
+  rows.slice(0,14).forEach((row,i)=>{
+    const y=ly0+i*16;
+    ctx.fillStyle=PAL[i%PAL.length]; ctx.fillRect(lx,y-9,10,10);
+    ctx.fillStyle='#e8ecf4'; ctx.font='11px sans-serif'; ctx.textAlign='left';
+    const nm=(row.name&&row.name.length>7)?row.name.slice(0,7)+'…':(row.name||row.code);
+    ctx.fillText(nm+'  '+row.pct.toFixed(1)+'%',lx+14,y);
+  });
+}
+/* 首页持仓总览表（市值/收益率/仓位占比/止盈止损状态），返回是否渲染 */
+function renderHomeHold(){
+  const el=$('homeHoldBody'); if(!el) return false;
+  const rows=allocData();
+  if(!state.hold.length){
+    el.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--sub);padding:14px;">暂无持仓 — 去「💼 持仓管理」录入成本，首页即可看总览</td></tr>';
+    drawAlloc('homeAllocCv');
+    return true;
+  }
+  let html='';
+  state.hold.forEach(h=>{
+    const p=priceOf(h.code), n=h.shares||0, c=h.cost||0;
+    const mv=n*p, co=n*c, plp=co?((mv-co)/co*100):0;
+    const r=rows.find(x=>x.code===h.code); const sharePct=r?r.pct:0;
+    let badge='';
+    if(h.target>0 && p>=h.target) badge='<span class="hh-badge">🔺 到止盈价</span>';
+    else if(h.stop>0 && p<=h.stop) badge='<span class="hh-badge">🔻 破止损价</span>';
+    html+='<tr><td><b>'+escapeHtml(nameOf(h.code))+'</b><div class="hh-code">'+h.code+'</div></td>'
+      +'<td>'+fmt(mv)+'</td><td class="'+cls(plp)+'">'+pct(plp)+'</td>'
+      +'<td>'+pct(sharePct)+'</td><td>'+(badge||'<span class="hh-ok">—</span>')+'</td></tr>';
+  });
+  el.innerHTML=html;
+  drawAlloc('homeAllocCv');
+  return true;
+}

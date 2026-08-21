@@ -366,7 +366,7 @@ function nameOf(code){
 function renderHold(){
   renderHoldSelect();
   const box=$('holdBox'); const sum=$('holdSummary');
-  if(!state.hold.length){ box.innerHTML='<div class="empty-state"><div class="es-icon">💼</div><div class="es-title">暂无持仓</div><div class="es-desc">在上方输入代码、数量、成本价，点「加持仓」开始记录。<br>持仓与自选互相独立，不必先加自选。</div><div class="es-actions"><button class="ghost" onclick="goView(\'market\')">去行情看板选标的 →</button></div></div>'; sum.innerHTML=''; return; }
+  if(!state.hold.length){ box.innerHTML='<div class="empty-state"><div class="es-icon">💼</div><div class="es-title">暂无持仓</div><div class="es-desc">在上方输入代码、数量、成本价，点「加持仓」开始记录。<br>持仓与自选互相独立，不必先加自选。</div><div class="es-actions"><button class="ghost" onclick="goView(\'market\')">去行情看板选标的 →</button></div></div>'; sum.innerHTML=''; const aw0=$('holdAllocWrap'); if(aw0) aw0.style.display='none'; return; }
   let totMV=0, totCost=0, totPL=0, totDay=0;
   const groups=[
     {label:'股票 / ETF', items: state.hold.filter(h=>!isFundKind(h.code))},
@@ -401,6 +401,9 @@ function renderHold(){
       +'<table><thead><tr><th>名称</th><th>数量</th><th>成本</th><th>现价</th><th>市值</th><th>盈亏</th><th>收益率</th><th>当日盈亏</th><th>止盈价</th><th>止损价</th><th>加仓(一键)</th><th>减仓(一键)</th><th>操作</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   });
   box.innerHTML=html;
+  // 仓位分布环形图（一期②：一张图看钱压在哪）
+  const aw=$('holdAllocWrap');
+  if(aw){ aw.style.display=(state.hold.length?'block':'none'); if(typeof drawAlloc==='function' && state.hold.length){ try{ drawAlloc('holdAllocCv'); }catch(e){} } }
   sum.innerHTML='<div class="stat"><div class="k">总市值</div><div class="v">'+fmt(totMV)+'</div></div>'
     +'<div class="stat"><div class="k">总持仓成本</div><div class="v">'+fmt(totCost)+'</div></div>'
     +'<div class="stat"><div class="k">总浮动盈亏</div><div class="v '+(cls(totPL))+'">'+fmt(totPL)+' ('+pct(totCost?totPL/totCost*100:0)+')</div></div>'
