@@ -101,7 +101,7 @@
     const S=REBAL_STATIC, pct=x=>(x*100).toFixed(1)+'%';
     let h='';
     h+='<div class="explain" style="margin-top:0;">老板问：既然每天都能看行情，为什么定<b>月末调仓</b>、不能随时切？下面用<b>真实回测数据</b>回答（不是拍脑袋）。同一套「可转债 vs 纳指+标普 双强动量 Top1」逻辑，只改调仓频率，腾讯前复权日K线 walk-forward。</div>';
-    h+='<div style="font-size:12px;color:var(--sub);margin:8px 2px;">📅 '+S.span+'　|　'+S.cost+'</div>';
+    h+='<div style="font-size:12px;color:var(--sub);margin:8px 2px;"> '+S.span+'　|　'+S.cost+'</div>';
     h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px;">';
     S.rows.forEach(r=>{
       const color=r.key==='monthly'?'#0a8f4d':(r.key==='daily'?'#d99a00':'#e01f22');
@@ -129,15 +129,15 @@
       +'12月动量是个<b>慢变量</b>，今天和昨天差不了多少；日频只在「纳指/可转债胶着」时来回锯，每次白交 0.1%、一年累计 7.5% 全喂手续费，还在高点附近横跳放大回撤。'
       +'<b>月末调仓不是能力限制，是纪律</b>——刻意降频躲噪音，实测更赚。纯纳指基准月频≈日频（无切换），证明差异全来自「切换逻辑在日频被锯齿放大」。</div>';
     h+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">'
-      +'<button id="btnRebalVerify" class="primary">📡 用真实行情重新验证（拉可转债/纳指/标普ETF）</button>'
+      +'<button id="btnRebalVerify" class="primary"> 用真实行情重新验证（拉可转债/纳指/标普ETF）</button>'
       +'<span id="rebalVerifyMsg" style="font-size:12px;color:var(--sub);"></span></div>';
     h+='<div id="rebalLive" style="margin-top:10px;"></div>';
     h+='<div class="card" style="margin-top:16px;border-left:3px solid var(--accent);">'
-      +'<div style="font-weight:700;font-size:13px;margin-bottom:4px;">🇨🇳 纯国内实战版（不碰美股，全部 A 股账户人民币可买）</div>'
+      +'<div style="font-weight:700;font-size:13px;margin-bottom:4px;"> 纯国内实战版（不碰美股，全部 A 股账户人民币可买）</div>'
       +'<div class="explain" style="margin:0 0 8px;">上面的频率实验是「含美股 ETF」版本。若你只做国内、且没股票账户，点下面看<b>买哪 3 只场外基金 + 每月几号调仓</b>的大白话清单与实时信号（支付宝/天天基金直接买，无需股票账户）：</div>'
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-      +'<a class="primary" style="text-decoration:none;" href="国内轮动实操清单.html" target="_blank">📋 国内轮动实操清单（买哪只+每月怎么做）</a>'
-      +'<a class="primary" style="text-decoration:none;background:var(--panel2);color:var(--accent);" href="cb-equity-switch.html" target="_blank">📡 国内轮动信号看板（实时该买哪只）</a>'
+      +'<a class="primary" style="text-decoration:none;" href="国内轮动实操清单.html" target="_blank"> 国内轮动实操清单（买哪只+每月怎么做）</a>'
+      +'<a class="primary" style="text-decoration:none;background:var(--panel2);color:var(--accent);" href="cb-equity-switch.html" target="_blank"> 国内轮动信号看板（实时该买哪只）</a>'
       +'</div></div>';
     body.innerHTML=h;
     const btn=document.getElementById('btnRebalVerify');

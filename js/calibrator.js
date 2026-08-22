@@ -95,12 +95,12 @@ const DataCalibrator = (function(){
     if(el('dcBadge')) return;
     titleBase = document.title || '行情工具';
     const badge=document.createElement('div');
-    badge.id='dcBadge'; badge.innerHTML='⚠️<span id="dcCount">0</span>';
+    badge.id='dcBadge'; badge.innerHTML='⚠<span id="dcCount">0</span>';
     badge.onclick=()=>{ const p=el('dcPanel'); if(p) p.style.display=(p.style.display==='block'?'none':'block'); };
     document.body.appendChild(badge);
     const panel=document.createElement('div');
     panel.id='dcPanel'; panel.style.display='none';
-    panel.innerHTML='<div id="dcHead">⚠️ 数据校准告警 <span id="dcClose" onclick="DataCalibrator.hide()">×</span></div><div id="dcBody"></div>';
+    panel.innerHTML='<div id="dcHead">⚠ 数据校准告警 <span id="dcClose" onclick="DataCalibrator.hide()">×</span></div><div id="dcBody"></div>';
     document.body.appendChild(panel);
   }
   function render(){
@@ -111,11 +111,11 @@ const DataCalibrator = (function(){
     if(total===0){
       if(b) b.style.display='none';
       if(p) p.style.display='none';
-      if(document.title.indexOf('⚠️ ')===0) document.title=titleBase;
+      if(document.title.indexOf('⚠ ')===0) document.title=titleBase;
       return;
     }
     if(b){ b.style.display='block'; el('dcCount').textContent=total; }
-    if(document.title.indexOf('⚠️ ')!==0) document.title='⚠️ '+document.title;
+    if(document.title.indexOf('⚠ ')!==0) document.title='⚠ '+document.title;
     let html='';
     for(const code in report.kline) html+='<div class="dcItem"><b>'+code+'</b> · K线：'+report.kline[code].join('；')+'</div>';
     if(report.quote.length) html+='<div class="dcItem">行情：'+report.quote.slice(0,10).join('；')+'</div>';

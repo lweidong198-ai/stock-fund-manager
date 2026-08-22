@@ -26,11 +26,31 @@ const VIEW_GROUPS = {
 function setNavOn(v){
   document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('on', n.dataset.view===v));
 }
+/* 视图淡入：移除再加 class 以重放 CSS 动画（reflow 触发） */
+function playIn(el){
+  if(!el || !el.classList) return;
+  el.classList.remove('anim');
+  void el.offsetWidth;
+  el.classList.add('anim');
+}
+/* 全站 17 个视图统一清单：顶层视图 + 三个分组(group)的子视图。
+   任何视图切换都必须先 hideAllViews()，否则会出现「上一视图残留重叠」的 bug
+   （如每日复盘→机会发现 时 viewReview 没被隐藏）。 */
+const ALL_VIEWS=['home','market','asset','macro','hold','review','dict','datacenter','rebalance','fund','fundAnalysis','myopp','fundRank','sectors','rotation','analysis','flow'];
+function hideAllViews(){
+  ALL_VIEWS.forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display='none'; });
+}
+function toggleFooterDetail(){
+  const d=document.getElementById('afDetail'), t=document.getElementById('afToggle');
+  if(!d||!t) return;
+  const open=d.style.display!=='none';
+  d.style.display=open?'none':'block';
+  t.classList.toggle('open', !open);
+}
 function showView(v, keepNav){
-  ['home','market','asset','macro','hold','review','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance','dict'].forEach(x=>{
-    const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1));
-    if(el) el.style.display=(x===v)?((x==='market'||x==='fund'||x==='fundAnalysis')?'grid':'block'):'none';
-  });
+  hideAllViews();
+  const el=$('view'+v.charAt(0).toUpperCase()+v.slice(1));
+  if(el){ el.style.display=(v==='market'||v==='fund'||v==='fundAnalysis')?'grid':'block'; playIn(el); }
   if(!keepNav) setNavOn(v);
   state.view=v;
   if(v==='home') renderHome();
@@ -53,7 +73,7 @@ function showSub(g, sub){
   const cfg=VIEW_GROUPS[g];
   cfg.tabs.forEach(t=>{
     const el=$('view'+t.key.charAt(0).toUpperCase()+t.key.slice(1));
-    if(el) el.style.display=(t.key===sub)?t.disp:'none';
+    if(el){ el.style.display=(t.key===sub)?t.disp:'none'; if(t.key===sub) playIn(el); }
   });
   setNavOn(g);
   state.view=sub;
@@ -66,7 +86,7 @@ function showSub(g, sub){
   }
 }
 function enterGroup(g){
-  ['home','market','hold','fund','fundAnalysis','sectors','rotation','analysis','flow','datacenter','rebalance'].forEach(x=>{ const el=$('view'+x.charAt(0).toUpperCase()+x.slice(1)); if(el) el.style.display='none'; });
+  hideAllViews();
   const sub=(state.subView&&state.subView[g])||VIEW_GROUPS[g].def;
   showSub(g, sub);
 }
@@ -202,6 +222,8 @@ window.addEventListener('resize',()=>{ if(state.selected){ const w=state.watch.f
 (function(){ try{ localStorage.setItem('_sfm_t','1'); localStorage.removeItem('_sfm_t'); hideStorageWarn(); }catch(e){ showStorageWarn(); } })(); // 启动即探明本地存储是否可用
 load(); bindFaHover();
 refreshIndices();
+refreshTicker();
+if(typeof renderTradeCalendar==='function') renderTradeCalendar();
 showView('home');
 if(!state.selected && state.watch.length){ state.selected=state.watch[0].code; } // 默认选中第一只，避免初次进各视图空白
 renderWatch(); renderHold(); renderHoldSelect();

@@ -224,7 +224,7 @@ function _renderOppList() {
   if (tm && meta) tm.textContent = '净值 ' + (meta.date || '--') + ' · 池 ' + meta.pool + ' 只 · ' + new Date(OPP_CACHE.t).toTimeString().slice(0, 5) + ' 扫描';
 
   const head = isPick
-    ? '<div class="opp-pickhead">🎯 <b>本期精选 ' + list.length + ' 只</b>：从 ' + rows.length + ' 只主动权益基金里，先按四维综合分取前 ' + OPP_P +
+    ? '<div class="opp-pickhead"> <b>本期精选 ' + list.length + ' 只</b>：从 ' + rows.length + ' 只主动权益基金里，先按四维综合分取前 ' + OPP_P +
     ' 名，再从中挑「长期强势但最近一个月没疯涨」的前 ' + OPP_N + ' 只。<b>持有周期按半年设计</b>，不是短线。</div>'
     : '';
 
@@ -254,7 +254,7 @@ function renderBacktest() {
   const box = $('btBody'); if (!box) return;
   box.innerHTML =
     '<p class="bt-note" style="border:1px solid #e3edf7;background:#f3f8fd;color:#26527a;padding:8px 10px;border-radius:8px;line-height:1.6;">' +
-    '📐 <b>这套规律是怎么验出来的</b>：取 <b>1958 只主动权益基金</b>近 6 年真实累计净值，从 2022-12 到 2026-02 每 5 个交易日切一个时点（共 <b>155 个时点</b>），' +
+    ' <b>这套规律是怎么验出来的</b>：取 <b>1958 只主动权益基金</b>近 6 年真实累计净值，从 2022-12 到 2026-02 每 5 个交易日切一个时点（共 <b>155 个时点</b>），' +
     '每个时点只用<b>当时能看到的数据</b>打分，再看之后 <b>120 个交易日（约半年）</b>的真实收益——即滚动样本外检验（walk-forward），不是拿历史结果倒推。</p>' +
 
     '<table class="bt-table"><thead><tr><th>检验项</th><th>结果</th><th>怎么读</th></tr></thead><tbody>' +
@@ -263,11 +263,11 @@ function renderBacktest() {
     '<tr><td><b>本策略（Top' + OPP_P + '→取' + OPP_N + '）超额</b></td><td style="color:var(--up);font-weight:700;">+2.55% / 半年 (t=2.2)</td><td>相对同批候选基金平均多赚的部分</td></tr>' +
     '<tr><td>参数稳健性 P=40~150 / N=10~20</td><td style="color:var(--up);">全部为正</td><td>换个参数结论不翻车，不是碰巧调出来的</td></tr>' +
     '<tr><td>后半段（2024-07~2026-02）</td><td style="color:var(--up);font-weight:700;">+3.82% (t=1.80)</td><td>近两年有效</td></tr>' +
-    '<tr><td>前半段（2022-12~2024-06）</td><td style="color:#e08a00;font-weight:700;">+0.52% (t=0.76)</td><td>⚠️ 几乎无效，只是没亏</td></tr>' +
+    '<tr><td>前半段（2022-12~2024-06）</td><td style="color:#e08a00;font-weight:700;">+0.52% (t=0.76)</td><td>⚠ 几乎无效，只是没亏</td></tr>' +
     '</tbody></table>' +
 
     '<p class="bt-note" style="border:1px solid #f6d6d6;background:#fdf3f3;color:#a4342f;padding:8px 10px;border-radius:8px;margin-top:8px;line-height:1.6;">' +
-    '⚠️ <b>必须知道的四个短板（不藏着）</b><br>' +
+    '⚠ <b>必须知道的四个短板（不藏着）</b><br>' +
     '① <b>年份很不均匀</b>：2023 +0.62%、<b>2024 −0.95%（亏的）</b>、2025 +3.79%、2026 前两月 +32%。收益高度集中在牛市段，' +
     '横盘年基本白干。<br>' +
     '② <b>不是稳赢，是赌右尾</b>：策略半年正收益比例 59%，反而略低于候选池平均的 62%；靠的是赢的时候赢很多。' +
@@ -277,11 +277,11 @@ function renderBacktest() {
     ' 只，天然偏向已经涨过的基金。</p>' +
 
     '<p class="bt-note" style="border:1px solid #e6eaf1;background:#fafbfd;color:#5a6472;padding:8px 10px;border-radius:8px;margin-top:8px;line-height:1.6;">' +
-    '🧪 <b>顺便说个反面结论</b>：本模块上一版扫的是 40 只行业ETF，用同样的真实样本外方法测出 RankIC = <b style="color:var(--down)">−0.116</b>' +
+    ' <b>顺便说个反面结论</b>：本模块上一版扫的是 40 只行业ETF，用同样的真实样本外方法测出 RankIC = <b style="color:var(--down)">−0.116</b>' +
     '（显著为负，等于反向推荐）。所以那一版<b>已经下线</b>，改成了现在这套基金版。' +
     '这里写出来是想说明：<b>面板上的数字都是真跑出来的，包括不好看的。</b></p>' +
 
-    '<p class="bt-note">📚 方法出处：Jegadeesh & Titman (1993) 动量效应；Carhart (1997) 基金业绩持续性；' +
+    '<p class="bt-note"> 方法出处：Jegadeesh & Titman (1993) 动量效应；Carhart (1997) 基金业绩持续性；' +
     'Fama-MacBeth 横截面回归 + RankIC 检验。<b>本模块只做历史统计描述，不构成任何投资建议。</b></p>';
 }
 
@@ -348,7 +348,7 @@ function renderOppDetail(r) {
 
   const hint = $('oppDetailHint');
   if (hint) {
-    hint.innerHTML = '📘 <b>怎么读</b>：综合分 = 四大类（' + OPP_GNAMES.join('、') + '）各自在池内排名后<b>等权</b>合成，' +
+    hint.innerHTML = ' <b>怎么读</b>：综合分 = 四大类（' + OPP_GNAMES.join('、') + '）各自在池内排名后<b>等权</b>合成，' +
       '方向由 155 个时点的真实样本外检验决定（长期/中期动量为正、短期涨太猛为负）。' +
       '<b>「1年−1月」是本策略的核心指标</b>——长期涨得多、但最近一个月没跟着疯涨的，历史上未来半年表现最好。' +
       '<b style="color:#a4342f">本页只描述历史统计，不预测涨跌、不构成投资建议；基金有风险，且策略在 2024 年是负超额。</b>';
@@ -439,7 +439,7 @@ async function renderRotation() {   // 函数名保留，供 app.js 既有接线
   let demoWarn = '';
   if (demoFails.length) {
     const head = demoFails.slice(0, 8).join('、') + (demoFails.length > 8 ? ' 等' : '');
-    demoWarn = '<div class="demo-warn">⚠️ 行情接口连不上：' + demoFails.length + ' 个行业（' + head + '）无法获取真实K线，<b>已隐藏其假数据</b>，表中标灰行为「连不上」。当日% 若正常显示则为真实行情，<b>请勿参考其趋势列</b>。请检查网络后点「重新读取」。</div>';
+    demoWarn = '<div class="demo-warn">⚠ 行情接口连不上：' + demoFails.length + ' 个行业（' + head + '）无法获取真实K线，<b>已隐藏其假数据</b>，表中标灰行为「连不上」。当日% 若正常显示则为真实行情，<b>请勿参考其趋势列</b>。请检查网络后点「重新读取」。</div>';
   }
 
   THERMO.rows = rows;   // 保留全部行（含连不上的 klMiss），渲染时标灰显示「连不上」，便于看出哪些行业掉线
@@ -509,7 +509,7 @@ function _renderThermo() {
   const body = sorted.map((r, i) => {
     const miss = r.klMiss;
     const hot = miss ? '' : _heatCls(r.c20, all20);
-    const label = miss ? '连不上' : ({ 'heat-hot': '🔥 很热', 'heat-warm': '🌤 偏热', 'heat-mid': '⬜ 一般', 'heat-cool': '🌥 偏冷', 'heat-cold': '❄️ 很冷' }[hot] || '--');
+    const label = miss ? '连不上' : ({ 'heat-hot': ' 很热', 'heat-warm': ' 偏热', 'heat-mid': ' 一般', 'heat-cool': ' 偏冷', 'heat-cold': ' 很冷' }[hot] || '--');
     const warn = (!miss && warnSet[r.code]) ? ' <span class="thermo-warn" title="牛市中波动最高的25%行业，实测显著跑输，属风险提示">⚠ 高波</span>' : '';
     return '<tr data-code="' + r.code + '"' + (miss ? ' class="row-miss"' : '') + '><td><span class="rank">' + (i + 1) + '</span></td>'
       + '<td>' + r.name + warn + '</td>'
@@ -531,10 +531,10 @@ function _renderThermo() {
   }
 
   const foot = '<div class="rot-note" style="margin-top:12px;">'
-    + '📌 <b>这张表只回答一件事：哪些行业最近热、哪些最近冷。</b>它<b>不排名"该买哪个"</b>，也不预测下一步。点行可加入自选、跳到行情看板看细节。<br>'
+    + ' <b>这张表只回答一件事：哪些行业最近热、哪些最近冷。</b>它<b>不排名"该买哪个"</b>，也不预测下一步。点行可加入自选、跳到行情看板看细节。<br>'
     + '<span style="color:var(--sub);">冷热档位按各行业近20日涨幅在全池中的相对位置划分（前20%=很热，后20%=很冷），是排名不是评分。</span></div>';
 
-  box.innerHTML = '<div class="rot-cands"><div class="rot-h">🌡️ 全部 ' + rows.length + ' 个行业冷热排队 <span style="color:var(--sub);font-weight:400;">（当前按' + ({ c5: '近5日', c20: '近20日', c60: '近60日', volAnn: '年化波动' }[key]) + '从高到低）</span></div>'
+  box.innerHTML = '<div class="rot-cands"><div class="rot-h"> 全部 ' + rows.length + ' 个行业冷热排队 <span style="color:var(--sub);font-weight:400;">（当前按' + ({ c5: '近5日', c20: '近20日', c60: '近60日', volAnn: '年化波动' }[key]) + '从高到低）</span></div>'
     + '<table class="sectors">' + head + '<tbody>' + body + '</tbody></table>' + warnBlk + foot + '</div>';
 
   const bn = $('rotationBanner'); if (bn) bn.innerHTML = (THERMO.demoWarn || '') + _thermoBanner();

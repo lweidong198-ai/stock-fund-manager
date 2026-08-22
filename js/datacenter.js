@@ -74,7 +74,7 @@ function _dcRenderFund(code){
     +_dcTile('最大回撤',pct(m.mdd),R,Math.min(Math.abs(m.mdd)/0.6,1))
     +_dcTile('年化波动',pct(m.vol),Y,Math.min(m.vol/0.4,1))
     +_dcTile('夏普比率',m.sharpe.toFixed(2),m.sharpe>1?G:(m.sharpe>=0?Y:R),Math.min(Math.max(m.sharpe,0)/2,1));
-  const concl='<div class="dc-concl'+(m.sharpe>=0?'':' warn')+'">🩺 <b>体检结论：</b>夏普 <b>'+m.sharpe.toFixed(2)+'</b>（'+rateTxt+'），风险调整后收益'+(m.sharpe>1?'出色':(m.sharpe>=0?'尚可':'偏弱'))+'；区间年化 <b class="'+(m.ann>=0?up:dn)+'">'+pct(m.ann)+'</b>，但最大回撤达 <b>'+pct(m.mdd)+'</b>，需承受相应波动。近1年 '+pct(m.r1)+'、近3年 '+pct(m.r3)+'、近5年 '+pct(m.r5)+'。'+(m.mdd<-0.3?'⚠ 回撤偏深，仓位宜控。':'')+'</div>';
+  const concl='<div class="dc-concl'+(m.sharpe>=0?'':' warn')+'"> <b>体检结论：</b>夏普 <b>'+m.sharpe.toFixed(2)+'</b>（'+rateTxt+'），风险调整后收益'+(m.sharpe>1?'出色':(m.sharpe>=0?'尚可':'偏弱'))+'；区间年化 <b class="'+(m.ann>=0?up:dn)+'">'+pct(m.ann)+'</b>，但最大回撤达 <b>'+pct(m.mdd)+'</b>，需承受相应波动。近1年 '+pct(m.r1)+'、近3年 '+pct(m.r3)+'、近5年 '+pct(m.r5)+'。'+(m.mdd<-0.3?'⚠ 回撤偏深，仓位宜控。':'')+'</div>';
   body.innerHTML=tiles
     +'<table class="dc"><thead><tr><th>指标</th><th class="num">数值</th><th>说明</th></tr></thead><tbody>'
     +'<tr><td>区间年化</td><td class="num '+(m.ann>=0?up:dn)+'">'+pct(m.ann)+'</td><td>净值复合年化</td></tr>'
@@ -100,7 +100,7 @@ async function dcRunVal(){
   const sorted=rows.slice().sort((a,b)=>(a.p3==null?9:a.p3)-(b.p3==null?9:b.p3));
   const barlist=sorted.map(r=>{ const p=r.p3==null?0:r.p3; const cls=p<0.3?'pct-low':(p<0.7?'pct-mid':'pct-high'); const col=p<0.3?'#0f9d58':(p<0.7?'#d99a00':'#e01f22'); const lab=p<0.3?'低估':(p<0.7?'合理':'偏高'); return '<div class="dc-bar-row"><span class="nm">'+r.n+'</span><div class="track"><i style="width:'+(p*100).toFixed(0)+'%;background:'+col+'"></i></div><span class="val '+cls+'">'+(r.p3==null?'—':(p*100).toFixed(0)+'% '+lab)+'</span></div>'; }).join('');
   const lowN=rows.filter(r=>r.p3!=null&&r.p3<0.3).length, hiN=rows.filter(r=>r.p3!=null&&r.p3>0.7).length;
-  const concl = med==null?'':('<div class="dc-concl'+(med>=0.7?' bad':(med>=0.3?'':' warn'))+'">🌡 <b>市场温度结论：</b>'+rows.length+' 个主要指数/行业当前整估处于【'+tempLab+'】（3年分位中位 <b>'+(med*100).toFixed(0)+'%</b>）。其中 <b>'+lowN+'</b> 个明显低估可关注，<b>'+hiN+'</b> 个明显偏高宜谨慎。下面按「便宜→贵」排序。这是「价格位置温度计」，非市盈率估值。</div>');
+  const concl = med==null?'':('<div class="dc-concl'+(med>=0.7?' bad':(med>=0.3?'':' warn'))+'"> <b>市场温度结论：</b>'+rows.length+' 个主要指数/行业当前整估处于【'+tempLab+'】（3年分位中位 <b>'+(med*100).toFixed(0)+'%</b>）。其中 <b>'+lowN+'</b> 个明显低估可关注，<b>'+hiN+'</b> 个明显偏高宜谨慎。下面按「便宜→贵」排序。这是「价格位置温度计」，非市盈率估值。</div>');
   body.innerHTML=tempHTML+'<div class="dc-barlist">'+barlist+'</div>'+concl+'<table class="dc"><thead><tr><th>标的</th><th class="num">3年分位</th><th class="num">5年分位</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+r.n+' <span class="meta">'+r.c+'</span></td>'+cell(r.p3)+cell(r.p5)+'</tr>').join('')+'</tbody></table><div class="dc-note">分位=当前价低于历史同区间价格的比例。低=比历史上多数时间便宜，高=偏贵。这是「价格位置温度计」，非市盈率估值。</div>';
 }
 async function dcRunCorr(){
@@ -128,7 +128,7 @@ async function dcRunCorr(){
   const avgBar='<div class="dc-bar-row"><span class="nm">平均相关性</span><div class="track"><i style="width:'+(avg*100).toFixed(0)+'%;background:'+avgCol+'"></i></div><span class="val" style="color:'+avgCol+'">'+avg.toFixed(2)+'</span></div>';
   let diag = mp.v>0.7 ? '⚠ <b>'+names[mp.i]+'</b> 与 <b>'+names[mp.j]+'</b> 相关性高达 <b>'+mp.v.toFixed(2)+'</b>，基本同涨同跌，分散有限。' : (mp.v<0.3 ? '✅ 持仓相关性普遍较低（最高 '+mp.v.toFixed(2)+'），分散度较好，能对冲部分风险。' : '持仓相关性中等（最高 '+mp.v.toFixed(2)+'），有一定分散但仍有同向波动。');
   const conclCls=mp.v>0.7?'bad':(mp.v<0.3?'':'warn');
-  const concl='<div class="dc-concl '+conclCls+'">🔗 <b>分散度结论：</b>'+diag+'</div>';
+  const concl='<div class="dc-concl '+conclCls+'"> <b>分散度结论：</b>'+diag+'</div>';
   html='<div class="dc-barlist">'+avgBar+'</div>'+concl+html;
   html+='<div class="dc-note">颜色：<span class="heat" style="background:#e23b3b">红</span> 高相关(集中) · <span class="heat" style="background:#d99a00">黄</span> 中 · <span class="heat" style="background:#1f9d55">绿</span> 低/负相关(分散)。</div>';
   body.innerHTML=html; if($('dcCorrTime')) $('dcCorrTime').textContent='基于 '+L+' 个交易日';
@@ -146,7 +146,7 @@ function dcRunDca(){
   for(let i=0;i<fd.cum.length;i+=step){ const nav=Number(fd.cum[i].nav); if(nav<=0) continue; invested+=1000; units+=1000/nav; invArr.push(invested); mvArr.push(units*nav); }
   const chart=_dcLineChart(invArr,mvArr,520,160);
   const conclCls=r.ret>=0?'':'warn';
-  const concl='<div class="dc-concl '+conclCls+'">📅 <b>定投结论：</b>每期¥1000、'+(freq==='w'?'每周':'每月')+'定投，区间累计投入 <b>¥'+Math.round(r.invested).toLocaleString()+'</b>，期末市值 <b>¥'+Math.round(r.mv).toLocaleString()+'</b>，收益 <b class="'+retc+'">'+(r.ret*100).toFixed(1)+'%</b>；定投期间最惨浮亏 <b>'+((r.minRatio-1)*100).toFixed(1)+'%</b>。'+(r.ret>=0?'长期坚持最终盈利，定投摊薄成本有效。':'区间内仍亏损，需结合估值低位坚持。')+'</div>';
+  const concl='<div class="dc-concl '+conclCls+'"> <b>定投结论：</b>每期¥1000、'+(freq==='w'?'每周':'每月')+'定投，区间累计投入 <b>¥'+Math.round(r.invested).toLocaleString()+'</b>，期末市值 <b>¥'+Math.round(r.mv).toLocaleString()+'</b>，收益 <b class="'+retc+'">'+(r.ret*100).toFixed(1)+'%</b>；定投期间最惨浮亏 <b>'+((r.minRatio-1)*100).toFixed(1)+'%</b>。'+(r.ret>=0?'长期坚持最终盈利，定投摊薄成本有效。':'区间内仍亏损，需结合估值低位坚持。')+'</div>';
   body.innerHTML=chart+concl+'<table class="dc"><thead><tr><th>项目</th><th class="num">数值</th></tr></thead><tbody>'
     +'<tr><td>每期投入</td><td class="num">¥1000</td></tr>'
     +'<tr><td>累计投入</td><td class="num">¥'+Math.round(r.invested).toLocaleString()+'</td></tr>'

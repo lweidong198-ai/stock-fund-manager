@@ -68,7 +68,7 @@ function reviewCollect(){
 /* 复盘卡 HTML */
 function reviewCardHtml(r){
   if(!r) return '';
-  let h = '<div class="review-card"><div class="rc-date">📅 ' + r.date + ' ' + (r.at||'') + ' 生成</div>';
+  let h = '<div class="review-card"><div class="rc-date"> ' + r.date + ' ' + (r.at||'') + ' 生成</div>';
   const b = r.bench || {};
   const benchParts = [];
   ['上证','深成指','创业板','沪深300'].forEach(n => { if(b[n] != null) benchParts.push(n + ' <b>' + (b[n]>=0?'+':'') + b[n].toFixed(2) + '%</b>'); });
@@ -100,7 +100,7 @@ function renderReview(){
   let h = '<div class="review-today">' + reviewCardHtml(r) + '</div>';
   const ks = Object.keys(all).sort().reverse().filter(k => k !== today);
   if(ks.length){
-    h += '<div class="review-hist-h">📚 历史复盘（近30天 · 点击展开）</div>';
+    h += '<div class="review-hist-h"> 历史复盘（近30天 · 点击展开）</div>';
     ks.forEach(k => {
       const old = all[k] || {};
       const pl = (old.hold && old.hold.pl != null) ? ((old.hold.pl>=0?'+':'') + fmt(old.hold.pl)) : '—';

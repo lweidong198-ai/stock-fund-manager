@@ -270,50 +270,65 @@ function allocData(){
     const p=typeof priceOf==='function'?priceOf(h.code):0;
     const mv=(h.shares||0)*p;
     if(!(mv>0)) return;
-    rows.push({code:h.code, name:typeof nameOf==='function'?nameOf(h.code):h.code, mv:mv, kind:(typeof isFundKind==='function'&&isFundKind(h.code))?'fund':'stock'});
+    rows.push({code:h.code, name:typeof nameOf==='function'?nameOf(h.code):h.code, mv:mv, cost:(h.cost||0), kind:(typeof isFundKind==='function'&&isFundKind(h.code))?'fund':'stock'});
     tot+=mv;
   });
   rows.forEach(r=>{ r.pct=tot?r.mv/tot*100:0; });
   return rows.sort((a,b)=>b.mv-a.mv);
 }
-/* 环形图：中心显示总市值，右侧图例=名称+占比。无持仓→画提示文字。 */
+/* 环形图：中心显示总市值；右侧图例（仅持仓管理页有容器时渲染）= 名称+市值+占比+收益率。
+   无持仓→画提示文字。DPI 适配保证视网膜屏清晰不糊。 */
 function drawAlloc(canvasId){
   const cv=$(canvasId); if(!cv) return;
   const ctx=cv.getContext&&cv.getContext('2d'); if(!ctx){ return; }
   const rows=allocData();
-  const w=cv.clientWidth||300, h=cv.clientHeight||parseInt(cv.getAttribute('height'))||220;
-  ctx.clearRect(0,0,w,h);
-  if(!rows.length){ paintCanvasMsg(canvasId,'暂无持仓','#8b95ab'); return; }
-  const cx=Math.round(w*0.30), cy=Math.round(h/2), R=Math.max(30,Math.min(h/2-18, w*0.26)), r=R*0.62;
   const PAL=['#5b8cff','#26a269','#e5484d','#d9a514','#8b5bff','#2aa8a0','#e07a3f','#7f9fd0','#c0559b','#5fbf5f'];
+  /* ---- HTML 图例（持仓管理页有 #<id>Legend 才渲染；首页右侧用 hh-table，不渲染）---- */
+  const leg=$(canvasId+'Legend');
+  if(leg){
+    if(!rows.length){ leg.innerHTML='<div class="alloc-empty">暂无持仓</div>'; }
+    else{
+      leg.innerHTML=rows.map(function(r,i){
+        const co=r.cost||0, plp=co?((r.mv-co)/co*100):null;
+        const plCls=plp==null?'':(plp>=0?'cls-up':'cls-dn'), plTxt=plp==null?'':pct(plp);
+        return '<div class="alloc-leg-row">'
+          +'<span class="alloc-leg-dot" style="background:'+PAL[i%PAL.length]+'"></span>'
+          +'<span class="alloc-leg-name" title="'+escapeHtml(r.name)+'">'+escapeHtml(r.name)+'</span>'
+          +'<span class="alloc-leg-mv">'+fmt(r.mv)+'</span>'
+          +'<span class="alloc-leg-pct">'+r.pct.toFixed(1)+'%</span>'
+          +(plTxt?'<span class="alloc-leg-pl '+plCls+'">'+plTxt+'</span>':'')
+          +'</div>';
+      }).join('');
+    }
+  }
+  /* ---- 环图（DPI 适配）---- */
+  const w=cv.clientWidth||300, cssH=cv.clientHeight||parseInt(cv.getAttribute('height'))||220;
+  const dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(w*dpr); cv.height=Math.round(cssH*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,cssH);
+  if(!rows.length){ paintCanvasMsg(canvasId,'暂无持仓','#8b95ab'); return; }
+  const cx=w/2, cy=cssH/2, R=Math.max(48,Math.min(cssH/2-14, w/2-14)), r=R*0.6;
   let a0=-Math.PI/2;
-  rows.forEach((row,i)=>{
+  rows.forEach(function(row,i){
     const sweep=row.pct/100*Math.PI*2;
-    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0,a0+sweep); ctx.closePath();
+    if(sweep<=0) return;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0+0.012,a0+sweep-0.012); ctx.closePath();
     ctx.fillStyle=PAL[i%PAL.length]; ctx.fill();
-    ctx.strokeStyle='#0f1420'; ctx.lineWidth=2; ctx.stroke();
     a0+=sweep;
   });
-  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle='#171e2e'; ctx.fill();
-  ctx.fillStyle='#8b95ab'; ctx.font='11px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('总市值',cx,cy-10);
-  ctx.fillStyle='#e8ecf4'; ctx.font='bold 12px sans-serif';
-  ctx.fillText(fmt(rows.reduce((s,x)=>s+x.mv,0),0),cx,cy+8);
-  const lx=w*0.56, ly0=Math.max(16, cy-Math.min(rows.length,14)*8);
-  rows.slice(0,14).forEach((row,i)=>{
-    const y=ly0+i*16;
-    ctx.fillStyle=PAL[i%PAL.length]; ctx.fillRect(lx,y-9,10,10);
-    ctx.fillStyle='#e8ecf4'; ctx.font='11px sans-serif'; ctx.textAlign='left';
-    const nm=(row.name&&row.name.length>7)?row.name.slice(0,7)+'…':(row.name||row.code);
-    ctx.fillText(nm+'  '+row.pct.toFixed(1)+'%',lx+14,y);
-  });
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle='#f5f7fb'; ctx.fill();
+  ctx.fillStyle='#6b7686'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('总市值',cx,cy-9);
+  ctx.fillStyle='#16202e'; ctx.font='bold 13px sans-serif';
+  ctx.fillText(fmt(rows.reduce(function(s,x){return s+x.mv;},0),0),cx,cy+9);
 }
 /* 首页持仓总览表（市值/收益率/仓位占比/止盈止损状态），返回是否渲染 */
 function renderHomeHold(){
   const el=$('homeHoldBody'); if(!el) return false;
   const rows=allocData();
   if(!state.hold.length){
-    el.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--sub);padding:14px;">暂无持仓 — 去「💼 持仓管理」录入成本，首页即可看总览</td></tr>';
+    el.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--sub);padding:14px;">暂无持仓 — 去「 持仓管理」录入成本，首页即可看总览</td></tr>';
     drawAlloc('homeAllocCv');
     return true;
   }
@@ -323,8 +338,8 @@ function renderHomeHold(){
     const mv=n*p, co=n*c, plp=co?((mv-co)/co*100):0;
     const r=rows.find(x=>x.code===h.code); const sharePct=r?r.pct:0;
     let badge='';
-    if(h.target>0 && p>=h.target) badge='<span class="hh-badge">🔺 到止盈价</span>';
-    else if(h.stop>0 && p<=h.stop) badge='<span class="hh-badge">🔻 破止损价</span>';
+    if(h.target>0 && p>=h.target) badge='<span class="hh-badge"> 到止盈价</span>';
+    else if(h.stop>0 && p<=h.stop) badge='<span class="hh-badge"> 破止损价</span>';
     html+='<tr><td><b>'+escapeHtml(nameOf(h.code))+'</b><div class="hh-code">'+h.code+'</div></td>'
       +'<td>'+fmt(mv)+'</td><td class="'+cls(plp)+'">'+pct(plp)+'</td>'
       +'<td>'+pct(sharePct)+'</td><td>'+(badge||'<span class="hh-ok">—</span>')+'</td></tr>';

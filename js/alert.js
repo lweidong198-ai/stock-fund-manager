@@ -46,10 +46,10 @@ function checkHoldAlerts(){
     const nm = (typeof nameOf === 'function') ? nameOf(h.code) : h.code;
     if(h.target > 0 && p >= h.target && !dayDone[h.code + '_t']){
       dayDone[h.code + '_t'] = 1; changed = true;
-      msgs.push('🔺 ' + nm + ' 已到止盈价 ' + fmt(h.target, 2) + '（现价 ' + fmt(p) + '）——按计划考虑止盈');
+      msgs.push(' ' + nm + ' 已到止盈价 ' + fmt(h.target, 2) + '（现价 ' + fmt(p) + '）——按计划考虑止盈');
     } else if(h.stop > 0 && p <= h.stop && !dayDone[h.code + '_s']){
       dayDone[h.code + '_s'] = 1; changed = true;
-      msgs.push('🔻 ' + nm + ' 已破止损价 ' + fmt(h.stop, 2) + '（现价 ' + fmt(p) + '）——按纪律考虑止损');
+      msgs.push(' ' + nm + ' 已破止损价 ' + fmt(h.stop, 2) + '（现价 ' + fmt(p) + '）——按纪律考虑止损');
     }
   });
   if(msgs.length){ beep(); alertFlash(msgs.join('　')); }

@@ -1,0 +1,61 @@
+# ===== 调试 / 探针 / 一次性脚本（不进版本库） =====
+_probe_*.mjs
+_probe_*.js
+_dbg_*.js
+_dbg_*.py
+_diag_*.js
+_diag_*.log
+_sweep.log
+_smoke_*.js
+_strip_emoji.py
+*k_clean.png
+_verify_kline.png
+_fac_cache.json
+_fund_cache.json
+_kl_cache.json
+_plus_diag_result.json
+*.cache_*/
+
+# ===== 各种可行性 / IC / 回测探针（研究用，非交付） =====
+fund_ic_test*.js
+real_ic_test.js
+backtest_*.js
+calibrate_test.js
+debug_replicate.js
+diag_tail.js
+fetch_funds.js
+gen_manual.py
+insert_algo.py
+kline_view_test.js
+opp_*.js
+oppopt_test.js
+probe_*.js
+sweep2.js
+sweep_fix.js
+split_refactor.js
+syntax_check.js
+verify_*.js
+verify_*.py
+verify_doc.py
+analyze_*.js
+
+# ===== 缓存 / 数据 dump =====
+*.cache.json
+*_cache.json
+fund_pool.json
+fund_nav_cache.json
+
+# ===== 备份 / 临时 =====
+*.bak
+*.bak-*
+js/*.bak-*
+index.html.bak
+
+# ===== 本地研究笔记 / 文档（非代码交付） =====
+*.docx
+~$*.docx
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+*.swp

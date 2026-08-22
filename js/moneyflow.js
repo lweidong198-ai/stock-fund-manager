@@ -67,18 +67,18 @@ function renderFlow(){
     const depthTot=bidVol+askVol; const bidPct=depthTot>0?bidVol/depthTot*100:50;
     selEl.innerHTML=
       '<div class="flow-name">'+name+' <span class="code">'+sel+'</span></div>'+
-      '<div class="sub-h2">💹 主动买卖力道（腾讯·内外盘）</div>'+
+      '<div class="sub-h2"> 主动买卖力道（腾讯·内外盘）</div>'+
       '<div class="bar2"><div class="bar-fill bar-buy" style="width:'+buyPct+'%">主动买 '+buyPct.toFixed(1)+'%</div><div class="bar-fill bar-sell" style="width:'+(100-buyPct)+'%">主动卖 '+(100-buyPct).toFixed(1)+'%</div></div>'+
       '<div class="kv-row"><span>主动买（外盘）</span><b class="up">'+fmt(outer)+' 手</b></div>'+
       '<div class="kv-row"><span>主动卖（内盘）</span><b class="down">'+fmt(inner)+' 手</b></div>'+
-      '<div class="sub-h2">📶 五档盘口委托力道</div>'+
+      '<div class="sub-h2"> 五档盘口委托力道</div>'+
       '<div class="bar2"><div class="bar-fill bar-bid" style="width:'+bidPct+'%">买盘 '+bidPct.toFixed(1)+'%</div><div class="bar-fill bar-ask" style="width:'+(100-bidPct)+'%">卖盘 '+(100-bidPct).toFixed(1)+'%</div></div>'+
       '<div class="kv-row"><span>买一~买五委托</span><b class="up">'+fmt(bidVol)+'</b></div>'+
       '<div class="kv-row"><span>卖一~卖五委托</span><b class="down">'+fmt(askVol)+'</b></div>'+
-      '<div class="meta" style="margin-top:8px;">🕒 数据时间：'+(fmtTs(q.time)||'—')+'</div>';
+      '<div class="meta" style="margin-top:8px;"> 数据时间：'+(fmtTs(q.time)||'—')+'</div>';
   }
   // —— 东方财富 真实主力净流入（异步）——
-  selEl.innerHTML += '<div class="sub-h2">💰 主力资金净流入（东方财富）</div><div id="flowMainCard" class="flow-big">获取中…</div><div class="meta" id="flowMainTime" style="font-size:11px;color:#888">数据来源：东方财富公开行情接口（主力净流入 = 超大单 + 大单净买入）</div>';
+  selEl.innerHTML += '<div class="sub-h2"> 主力资金净流入（东方财富）</div><div id="flowMainCard" class="flow-big">获取中…</div><div class="meta" id="flowMainTime" style="font-size:11px;color:#888">数据来源：东方财富公开行情接口（主力净流入 = 超大单 + 大单净买入）</div>';
   if(sel && !sel.startsWith('us')){
     loadFundFlow(sel, function(ff){
       const card=$('flowMainCard'); if(!card) return;
@@ -88,7 +88,7 @@ function renderFlow(){
         const sign=ff.main>=0?'+':'';
         const pctTxt=(ff.mainPct!=null)?(' · 占成交额约 '+(ff.mainPct>0?'+':'')+ff.mainPct.toFixed(2)+'%'):'';
         card.innerHTML='<span class="'+mc+'">'+sign+fmtMoney(ff.main)+'</span><div class="meta">今日主力净流入 '+(mc==='up'?'资金流入':(mc==='down'?'资金流出':'均衡'))+pctTxt+'</div>';
-        if(timeEl) timeEl.textContent='🕒 数据时间：'+(fmtTs(ff.time)||'当日累计');
+        if(timeEl) timeEl.textContent=' 数据时间：'+(fmtTs(ff.time)||'当日累计');
         return;
       }
       // 东财不可达 → 回退腾讯内外盘主动买卖净差额（手，沙箱/受限网络也能算，基于真实成交，口径≠券商主力）
@@ -104,7 +104,7 @@ function renderFlow(){
         return;
       }
       const errMsg = ff && ff.err==='nosecid' ? '当前代码不支持主力资金流' : (ff && ff.err==='timeout' ? '请求超时' : '东方财富接口暂不可达');
-      card.innerHTML='<span class="down">获取失败</span><div class="meta">'+errMsg+'，上方腾讯内外盘数据仍有效。如遇企业网络/沙箱限制，请在普通浏览器打开 GitHub Pages 链接。</div><button class="ghost" style="margin-top:6px;font-size:12px;padding:4px 10px;" onclick="renderFlow()">↻ 重试</button>';
+      card.innerHTML='<span class="down">获取失败</span><div class="meta">'+errMsg+'，上方腾讯内外盘数据仍有效。如遇企业网络/沙箱限制，请在普通浏览器打开 GitHub Pages 链接。</div><button class="ghost" style="margin-top:6px;font-size:12px;padding:4px 10px;" onclick="renderFlow()"> 重试</button>';
     });
   } else {
     const card=$('flowMainCard'); if(card) card.innerHTML='<span class="flat">美股无主力资金流数据</span>';
@@ -142,7 +142,7 @@ function refreshFlow(){
   refreshQuotes(function(){
     if(state.view==='flow') renderFlow();
     const ft=$('flowRefreshTime'); if(ft) ft.textContent='上次刷新：'+ts()+'（手动快照，不自动刷新）';
-    if(btn){ btn.disabled=false; btn.textContent='↻ 手动刷新资金流向'; }
+    if(btn){ btn.disabled=false; btn.textContent=' 手动刷新资金流向'; }
   });
 }
 

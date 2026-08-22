@@ -580,7 +580,7 @@
     if(_done && !force) return;               // 已渲染过且非强制刷新 → 不重绘（频闪根治点）
     const box=document.getElementById('homePanorama'); if(!box) return;
     _busy=true;
-    if(force) _done=false;                     // 强制刷新（🔄按钮）：重置，走完整流程
+    if(force) _done=false;                     // 强制刷新（按钮）：重置，走完整流程
     ['panGlobal','panHeat','panFund','panOpps','panNews'].forEach(id=>{ const e=document.getElementById(id); if(e) e.innerHTML='<div class="pan-sub-note">加载中…</div>'; });
     const warnEl=document.getElementById('homePanoramaWarn'); if(warnEl) warnEl.innerHTML='';
     const POOL=INDUSTRY_POOL.concat((typeof loadCustomSectors==='function')?loadCustomSectors():[]);

@@ -140,7 +140,7 @@ function computeAddCash(kind, cash, price, oldShares, oldCost){
   return {ok:true, addShares, newShares, newCost, used, leftover, price};
 }
 /* 手动减仓：按卖出金额一键算股数并减仓（与 computeAddCash 对称）。
-   ⚠️ 减仓不改变剩余持仓的成本价（会计准则：卖出只锁定已实现盈亏，不摊薄/抬高剩余成本）。
+   ⚠ 减仓不改变剩余持仓的成本价（会计准则：卖出只锁定已实现盈亏，不摊薄/抬高剩余成本）。
    股票：取整到 100 股/手；基金：份额保留 2 位小数。
    卖出金额对应股数 > 持仓 → 拦截（避免卖超/误操作）。
    刚好卖光 → 数量归 0、成本价归 0（已无持仓）。

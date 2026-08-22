@@ -208,7 +208,7 @@ function t_buildReport(code, name, kind, closes, dates, A){
   rows.forEach(r=>{ html+='<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>'; });
   html+='</tbody></table>';
   html+='<div class="tr-tip">'+A.tip+'</div>';
-  html+='<div class="tr-note">📌 <b>走势读法（描述，非预测）</b>：中线看 '+(A.c60>=0?'上行':'下行')+'、短线 '+(A.c20>=0?'反弹':'走弱')+'。本状态在实证中后续 60 日涨概率约 43%~57%（接近随机），历史上「下跌反弹·诱多」多为中途反弹。<b>仅作仓位路标，不构成买卖建议。</b>数据来源：腾讯行情/前复权K线'+(kind==='fund'?' + 东方财富基金净值':'')+'，免费实时无需 Key。</div>';
+  html+='<div class="tr-note"> <b>走势读法（描述，非预测）</b>：中线看 '+(A.c60>=0?'上行':'下行')+'、短线 '+(A.c20>=0?'反弹':'走弱')+'。本状态在实证中后续 60 日涨概率约 43%~57%（接近随机），历史上「下跌反弹·诱多」多为中途反弹。<b>仅作仓位路标，不构成买卖建议。</b>数据来源：腾讯行情/前复权K线'+(kind==='fund'?' + 东方财富基金净值':'')+'，免费实时无需 Key。</div>';
   html+='</div>';
   return html;
 }
@@ -245,7 +245,7 @@ function openTrendModal(code){
   if(!mask) return;
   mask.classList.add('show');
   const body=document.getElementById('trendModalBody');
-  body.innerHTML='<div class="tr-loading">⏳ 正在拉取真实行情/K线计算走势…</div>';
+  body.innerHTML='<div class="tr-loading"> 正在拉取真实行情/K线计算走势…</div>';
   document.getElementById('trendModalTitle').textContent='走势分析 · '+(name||code);
   analyzeTrend(code).then(res=>{
     body.innerHTML=res.html;

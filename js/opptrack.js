@@ -2,7 +2,7 @@
  * opptrack.js — 二期「我的机会」跟踪 + 条件提醒
  * 把看中的 ETF/股票/基金加入跟踪（localStorage），持续显示：
  *   现价/今日涨跌/近20日走势 + 四灯状态（估值/资金/技术/趋势）
- * 条件提醒：估值灯绿 且 技术灯绿 → 标「🎯 机会窗口」黄条提醒。
+ * 条件提醒：估值灯绿 且 技术灯绿 → 标「 机会窗口」黄条提醒。
  * 纯描述，不构成投资建议。
  * ========================================================================= */
 var MOPP_KEY = 'qr_myopp_v1';
@@ -37,7 +37,7 @@ async function renderMyOpps(){
   const seq = ++_moppRenderSeq;               // 竞态守卫：旧渲染结果不得覆盖新渲染
   const el = $('myOppBody'); if(!el) return;
   const list = loadMyOpps();
-  if(!list.length){ el.innerHTML = '<div class="empty-state"><div class="es-icon">⭐</div><div class="es-title">还没有跟踪标的</div><div class="es-desc">去「行情看板」选中标的，点右上「⭐ 加机会」加入；或在本页输入代码添加。</div><div class="es-actions"><input id="myOppCode" class="add-input" placeholder="输入代码，如 515050 / 159755" style="width:200px;" /><button class="ghost" onclick="addMyOpp($(\'myOppCode\').value.trim())">加机会</button></div></div>';
+  if(!list.length){ el.innerHTML = '<div class="empty-state"><div class="es-icon"></div><div class="es-title">还没有跟踪标的</div><div class="es-desc">去「行情看板」选中标的，点右上「 加机会」加入；或在本页输入代码添加。</div><div class="es-actions"><input id="myOppCode" class="add-input" placeholder="输入代码，如 515050 / 159755" style="width:200px;" /><button class="ghost" onclick="addMyOpp($(\'myOppCode\').value.trim())">加机会</button></div></div>';
     return;
   }
   el.innerHTML = '<div class="sig-load">跟踪数据加载中…</div>';
@@ -67,7 +67,7 @@ async function renderMyOpps(){
     const windowOpen = li.val && li.val.state==='green' && li.tech && li.tech.state==='green';
     h += '<div class="mopp-row' + (windowOpen ? ' win' : '') + '">'
       + '<div class="mopp-main"><div class="mopp-nm"><b>' + escapeHtml(x.name || x.code) + '</b> <span class="hh-code">' + x.code + '</span>'
-      + (windowOpen ? '<span class="mopp-badge">🎯 机会窗口</span>' : '') + '</div>'
+      + (windowOpen ? '<span class="mopp-badge"> 机会窗口</span>' : '') + '</div>'
       + '<div class="mopp-p">现价 ' + (q ? fmt(q.price) : '—') + '　今日 ' + (q && q.changePct!=null ? '<span class="' + (q.changePct>=0?'cls-up':'cls-dn') + '">' + (q.changePct>=0?'+':'') + q.changePct.toFixed(2) + '%</span>' : '—')
       + '　近20日 ' + (c20!=null ? (c20>=0?'+':'') + c20.toFixed(1) + '%' : '—') + '</div>'
       + '<div class="mopp-lights">估值' + iconOf(li.val&&li.val.state) + ' 资金' + iconOf(li.fund&&li.fund.state) + ' 技术' + iconOf(li.tech&&li.tech.state) + ' 趋势' + iconOf(li.trend&&li.trend.state)

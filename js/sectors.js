@@ -321,7 +321,7 @@ async function computeIndustryRows(POOL){
   const demoFails=rows.filter(r=>r.klMiss).map(r=>r.name);
   let demoWarn='';
   if(demoFails.length){ const head=demoFails.slice(0,8).join('、')+(demoFails.length>8?' 等':'');
-    demoWarn='⚠️ 行情接口连不上：'+demoFails.length+' 个行业（'+head+'）无法获取真实K线，已隐藏其假数据，表中标灰为「连不上」。当日% 若正常显示则为真实行情，请勿参考其趋势列。请检查网络后刷新。'; }
+    demoWarn='⚠ 行情接口连不上：'+demoFails.length+' 个行业（'+head+'）无法获取真实K线，已隐藏其假数据，表中标灰为「连不上」。当日% 若正常显示则为真实行情，请勿参考其趋势列。请检查网络后刷新。'; }
   return { rows, bench60, demoWarn, quotes };
 }
 // 历史回看：逐根判定"反转确认"，返回拐点日期数组（升序），供表内"最近拐点"与K线图标记复用
@@ -572,7 +572,7 @@ async function renderSectors(){
   let demoWarn='';
   if(demoFails.length){
     const head = demoFails.slice(0,8).join('、') + (demoFails.length>8?' 等':'');
-    demoWarn='<div class="demo-warn">⚠️ 行情接口连不上：'+demoFails.length+' 个行业（'+head+'）无法获取真实K线，<b>已隐藏其假数据</b>，表中标灰行为「连不上」。当日% 若正常显示则为真实行情，<b>请勿参考其趋势列</b>。请检查网络后点「重新扫描」。</div>';
+    demoWarn='<div class="demo-warn">⚠ 行情接口连不上：'+demoFails.length+' 个行业（'+head+'）无法获取真实K线，<b>已隐藏其假数据</b>，表中标灰行为「连不上」。当日% 若正常显示则为真实行情，<b>请勿参考其趋势列</b>。请检查网络后点「重新扫描」。</div>';
   }
   // 注：原「滚动自适应校准→上涨概率」已移除（回测证实综合分对未来涨跌近无预测力），本页不再输出概率。
   // 排序：技术强弱分降序（数据不足排最后）

@@ -148,6 +148,9 @@ async function main(){
   hitRate(rows.filter(r=>r.score>=3 && r.fracPct<0.10 && r.sig.includes('div')),'组合3: 共振>=3 + 估值<10% + 底背离');
   hitRate(rows.filter(r=>r.score>=3 && r.fracPct<0.10 && r.sig.includes('div') && r.volr!=null && r.volr<0.5),'组合4: 组合3 + 量比<0.5');
   hitRate(rows.filter(r=>r.score>=3 && r.fracPct<0.10 && r.sig.includes('div') && r.rsi<22),'组合5: 组合3 + RSI<22');
+  // 老板指定最严组合：RSI<20 + 估值<5% + 底背离 + 共振>=3
+  hitRate(rows.filter(r=>r.score>=3 && r.fracPct<0.05 && r.sig.includes('div') && r.rsi<20),'组合6(老板指定): 共振>=3+估值<5%+底背离+RSI<20');
+  hitRate(rows.filter(r=>r.score>=3 && r.fracPct<0.05 && r.sig.includes('div') && r.rsi<20 && r.volr!=null && r.volr<0.5),'组合7(最严): 组合6+量比<0.5');
 
   console.log('\n############ D. Top 成功案例（信号后60日涨幅最高的真实样本）############');
   const top=rows.filter(r=>r.ret60!=null).sort((a,b)=>b.ret60-a.ret60).slice(0,12);

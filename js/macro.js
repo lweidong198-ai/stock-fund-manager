@@ -6,10 +6,10 @@
  * 全部数据走腾讯行情+K线（必通）。不构成投资建议。
  * ========================================================================= */
 var MACRO_ITEMS = [
-  { code:'sh511260', key:'rate', name:'利率方向', via:'十年国债ETF', logic:'债价涨 → 市场预期利率下行（债牛）；债价跌 → 担心利率上行', how:'债涨时成长/长久期资产相对受益；债跌时警惕利率压力' },
-  { code:'sh518880', key:'gold', name:'避险情绪', via:'黄金ETF', logic:'金价涨 → 避险情绪浓', how:'金涨+股市跌=资金在躲风险；金涨+股市也涨=流动性宽松' },
-  { code:'sh000300', key:'eco', name:'景气代理', via:'沪深300（近60日）+ 行业轮动宽度', logic:'大盘涨 → 市场对经济预期偏乐观', how:'仅作代理，不能替代官方 GDP/PMI；宽度=今天多少行业在涨' },
-  { code:'sh513100', key:'risk', name:'海外风险偏好', via:'纳指ETF', logic:'纳指涨 → 全球风险偏好回升', how:'海外情绪外溢的参考' }
+  { code:'sh511260', key:'rate', name:'利率方向', via:'十年国债ETF', warm:1, logic:'债价涨 → 市场预期利率下行（债牛）；债价跌 → 担心利率上行', how:'债涨时成长/长久期资产相对受益；债跌时警惕利率压力' },
+  { code:'sh518880', key:'gold', name:'避险情绪', via:'黄金ETF', warm:-1, logic:'金价涨 → 避险情绪浓', how:'金涨+股市跌=资金在躲风险；金涨+股市也涨=流动性宽松' },
+  { code:'sh000300', key:'eco', name:'景气代理', via:'沪深300（近60日）+ 行业轮动宽度', warm:1, logic:'大盘涨 → 市场对经济预期偏乐观', how:'仅作代理，不能替代官方 GDP/PMI；宽度=今天多少行业在涨' },
+  { code:'sh513100', key:'risk', name:'海外风险偏好', via:'纳指ETF', warm:1, logic:'纳指涨 → 全球风险偏好回升', how:'海外情绪外溢的参考' }
 ];
 function macroDir(v){
   if(v == null) return { tag:'数据不足', cls:'flat', icon:'⚪' };
@@ -18,14 +18,16 @@ function macroDir(v){
   if(v <= -2) return { tag:'明显偏空', cls:'down', icon:'🔴' };
   return { tag:'偏空', cls:'down', icon:'🔴' };
 }
-function macroCardHtml(it, q, c20, extra){
+function macroCardHtml(it, q, c20, extra, closes){
   const dir = macroDir(c20);
+  var spark = (closes && typeof sparklineSVG==='function') ? sparklineSVG(closes, {h:38}) : '';
   return '<div class="mc-card"><div class="mc-h">' + dir.icon + ' <b>' + it.name + '</b> <span class="am-tag">' + it.via + '</span>'
     + '<span class="mc-dir ' + dir.cls + '">' + dir.tag + '</span></div>'
     + '<div class="mc-now">今日 ' + (q && q.changePct != null ? '<span class="' + (q.changePct>=0?'cls-up':'cls-dn') + '">' + (q.changePct>=0?'+':'') + q.changePct.toFixed(2) + '%</span>' : '—')
     + '　近20日 ' + (c20 != null ? '<span class="' + (c20>=0?'cls-up':'cls-dn') + '">' + (c20>=0?'+':'') + c20.toFixed(2) + '%</span>' : '—') + '</div>'
+    + (spark ? '<div class="mc-spark">' + spark + '</div>' : '')
     + (extra ? '<div class="mc-extra">' + extra + '</div>' : '')
-    + '<div class="mc-logic">📖 ' + it.logic + '</div>'
+    + '<div class="mc-logic"> ' + it.logic + '</div>'
     + '<div class="mc-how">怎么用：' + it.how + '</div></div>';
 }
 async function renderMacro(){
@@ -53,16 +55,32 @@ async function renderMacro(){
     }
   }catch(e){}
   let h = '';
+  var dirSum = 0, upCnt = 0, totCnt = 0;
   for(const it of MACRO_ITEMS){
     const q = quotes[it.code];
-    let c20 = null;
+    let c20 = null, closes = null;
     if(typeof loadKlineP==='function' && typeof klinePct==='function'){
-      try{ const kl = await loadKlineP(it.code, 'd'); if(kl && kl.length) c20 = klinePct(kl, 20); }catch(e){}
+      try{ const kl = await loadKlineP(it.code, 'd'); if(kl && kl.length){ c20 = klinePct(kl, 20); closes = (kl.length>60 ? kl.slice(-60) : kl).map(z => z.close); } }catch(e){}
     }
+    if(c20 != null){ totCnt++; if(c20>=0) upCnt++; dirSum += (c20>0 ? 1 : (c20<0 ? -1 : 0)) * (it.warm||1); }
     let extra = null;
     if(it.key === 'eco' && width) extra = '行业轮动宽度：今日上涨 <b>' + width + '</b> 家（涨多=市场情绪偏暖）';
-    h += macroCardHtml(it, q, c20, extra);
+    h += macroCardHtml(it, q, c20, extra, closes);
   }
+  /* 宏观综合温度：4 指标近20日方向加权（warm 表示对「偏暖」的贡献方向） */
+  var avgDir = totCnt ? dirSum / totCnt : 0;
+  var tempPct = Math.max(0, Math.min(100, Math.round((avgDir + 1) * 50)));
+  var mood, mcol;
+  if(avgDir > 0.25){ mood = '偏暖'; mcol = '#e8803a'; }
+  else if(avgDir < -0.25){ mood = '偏冷'; mcol = '#3a7bd5'; }
+  else { mood = '中性'; mcol = '#9aa7b8'; }
+  var summary = '<div class="mc-summary"><div class="mc-temp-top">'
+    + '<span class="mc-temp-label">宏观综合温度</span>'
+    + '<span class="mc-temp-val" style="color:' + mcol + '">' + mood + '</span></div>'
+    + '<div class="mc-temp-bar"><i style="left:' + tempPct + '%"></i></div>'
+    + '<div class="mc-temp-cap"><span>冷 · 避险</span><span>暖 · 进攻</span></div>'
+    + '<div class="mc-temp-detail">4 项间接指标中 ' + upCnt + ' 项近20日上涨（利率/避险/景气/海外）；温度按方向加权，非官方数据。</div></div>';
   el.innerHTML = '<div class="mc-warn">⚠ <b>本页为「间接指标」</b>：免费前端拿不到官方 CPI/M2/PMI/官方利率（数据源受限），用行情类指标代替观察<b>方向</b>，不是官方统计、不构成投资建议。</div>'
+    + summary
     + '<div class="mc-grid">' + h + '</div>';
 }

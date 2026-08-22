@@ -2,7 +2,7 @@
  * fundrank.js — 二期 基金排行筛选
  * 数据源：东方财富天天基金排行（rankhandler.aspx，script 注入读全局 rankData）
  * 排序：近1年涨幅降序，展示 代码/名称/单位净值/日增长率/近1周~近1年
- * ⚠️ 东财在你的网络下可能被拦 → 诚实提示「排行源被拦，本机双击 index.html 可用」
+ * ⚠ 东财在你的网络下可能被拦 → 诚实提示「排行源被拦，本机双击 index.html 可用」
  * 排行仅作筛选参考，不构成投资建议。
  * ========================================================================= */
 var RANK_URL = 'https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=1nzf&st=desc&pi=1&pn=30&dx=1&v=';

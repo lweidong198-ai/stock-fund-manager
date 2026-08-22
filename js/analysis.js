@@ -289,7 +289,7 @@ function renderAnalysis(){
   // 速览卡的 MACD 数值按副图当前参数展示（与副图一致）；大师评级仍用标准 M.macd，互不影响
   let mm=M.macd; try{ const ss=getSeries(code); if(ss&&ss.closes&&ss.closes.length>=30){ mm=macd(ss.closes, state.macdParam); } }catch(_){}
   const trendTxt = M.trend==='bull'?'向上↑':M.trend==='bear'?'向下↓':'横盘→';
-  const metricsHtml = '<div class="rtitle">📐 关键指标速览（大师们就是看这些数判断的）</div><div class="imetric-grid">'
+  const metricsHtml = '<div class="rtitle"> 关键指标速览（大师们就是看这些数判断的）</div><div class="imetric-grid">'
     + mc('现价 / 净值', fmt(a.nowP, w&&w.kind==='fund'?4:2), w&&w.kind==='fund'?'基金单位净值':'股票最新价')
     + mc('MA5 / MA20', fmt(M.ma5,2)+' / '+fmt(M.ma20,2), '5日 / 20日均线（平均价线）')
     + mc('MA60', M.ma60!=null?fmt(M.ma60,2):'--', '60日均线（中期趋势线）')
@@ -304,7 +304,7 @@ function renderAnalysis(){
     + mc('整体趋势', trendTxt, '均线排列方向')
     + '</div>';
   $('anMetrics').innerHTML = metricsHtml;
-  risksEl.innerHTML='<div class="rtitle">📌 关键提示</div><ul class="rlist">'+a.risks.map(r=>'<li>'+r+'</li>').join('')+'</ul>';
+  risksEl.innerHTML='<div class="rtitle"> 关键提示</div><ul class="rlist">'+a.risks.map(r=>'<li>'+r+'</li>').join('')+'</ul>';
   mastersEl.innerHTML=a.results.map(r=>{
     const sc = r.signal==='看多'?'m-up':r.signal==='看空'?'m-down':'m-flat';
     return '<div class="mcard"><div class="mhead"><span class="mname">'+r.name+'</span><span class="mtag">'+r.tag+'</span><span class="mbadge '+sc+'">'+r.signal+'</span></div>'
@@ -335,14 +335,14 @@ async function renderPortfolioAnalysis(){
   state.anaMode='portfolio';  // 进入组合研判模式：此后所有 renderAnalysis 调用被闸门拦下，直到用户切回单只（selectCode/showView 会重置）
   const head=$('anHead'), verdictEl=$('anVerdict'), risksEl=$('anRisks'), mastersEl=$('anMasters'), metricsEl=$('anMetrics'), timeEl=$('anTime');
   if(!state.hold.length){
-    head.innerHTML='<span class="big">📊 持仓组合研判</span>';
-    verdictEl.innerHTML='<div class="empty">你还没有持仓。先去「💼 持仓管理」加一笔，再回来点这个按钮，就能一键给整个组合做大师研判。</div>';
+    head.innerHTML='<span class="big"> 持仓组合研判</span>';
+    verdictEl.innerHTML='<div class="empty">你还没有持仓。先去「 持仓管理」加一笔，再回来点这个按钮，就能一键给整个组合做大师研判。</div>';
     risksEl.innerHTML=''; mastersEl.innerHTML=''; metricsEl.innerHTML=''; timeEl.textContent='';
     return;
   }
   // 兜底：保证每只持仓都在自选里，analyze→getSeries 才能正确识别股票/基金
   state.hold.forEach(h=>{ if(!state.watch.some(w=>w.code===h.code)) state.watch.push({code:h.code, kind:h.kind}); });
-  head.innerHTML='<span class="big">📊 持仓组合研判</span><span class="meta">'+state.hold.length+' 只标的</span><span id="anPrice" style="margin-left:auto;"></span>';
+  head.innerHTML='<span class="big"> 持仓组合研判</span><span class="meta">'+state.hold.length+' 只标的</span><span id="anPrice" style="margin-left:auto;"></span>';
   verdictEl.innerHTML='<div class="empty">正在为每只持仓拉取行情数据…（首次可能需几秒）</div>';
   risksEl.innerHTML=''; mastersEl.innerHTML=''; metricsEl.innerHTML=''; timeEl.textContent='';
   await Promise.all(state.hold.map(h=>ensureDataReady(h.code, h.kind)));
@@ -354,13 +354,13 @@ async function renderPortfolioAnalysis(){
   const avg = valid.length? Math.round(scoreSum/valid.length):0;
   let mv=0, cost=0; state.hold.forEach(h=>{ const p=priceOf(h.code)||0; mv+=p*h.shares; cost+=h.cost*h.shares; });
   let pVerdict, pClass;
-  if(!valid.length){ pVerdict='⚠️ 持仓里没有可分析的标的（可能行情/净值还没拉到，稍后重试）'; pClass='v-flat'; }
+  if(!valid.length){ pVerdict='⚠ 持仓里没有可分析的标的（可能行情/净值还没拉到，稍后重试）'; pClass='v-flat'; }
   else if(bull>=bear && bull>=neutral && bull>0){ pVerdict='🟢 组合整体偏积极：多数持仓处于可建仓/加仓区，可分批布局、注意控制节奏'; pClass='v-good'; }
   else if(bear>=bull && bear>=neutral && bear>0){ pVerdict='🔴 组合整体偏弱：多数持仓被大师判为暂缓/回避，建议控仓观望、不急于加仓'; pClass='v-bad'; }
   else { pVerdict='⚪ 组合信号分化：多空互现，建议按个股信号分别操作，整体保持中性仓位'; pClass='v-mid'; }
   verdictEl.innerHTML='<div class="vbox '+pClass+'"><div class="vlabel">持仓组合整体建仓适宜度</div><div class="vtext">'+pVerdict+'</div><div class="vsub">'+valid.length+' 只有效标的 · 平均综合评分 '+(avg>=0?'+':'')+avg+' · 看多 '+bull+' · 中性 '+neutral+' · 看空 '+bear+'</div></div>';
   const mc=(label,val,sub)=>'<div class="istat"><div class="ik">'+label+'</div><div class="iv">'+val+'</div>'+(sub?'<div class="is">'+sub+'</div>':'')+'</div>';
-  metricsEl.innerHTML='<div class="rtitle">📐 组合概览</div><div class="imetric-grid">'
+  metricsEl.innerHTML='<div class="rtitle"> 组合概览</div><div class="imetric-grid">'
     + mc('持仓标的数', state.hold.length, '本次纳入分析')
     + mc('有效分析', valid.length, bad.length?('另有 '+bad.length+' 只数据不足'):'全部就绪')
     + mc('平均综合评分', (avg>=0?'+':'')+avg, '13位大师加权')
@@ -372,8 +372,8 @@ async function renderPortfolioAnalysis(){
   const tally={}; valid.forEach(x=>x.a.risks.forEach(r=>{ tally[r]=(tally[r]||0)+1; }));
   const topRisks=Object.keys(tally).sort((a,b)=>tally[b]-tally[a]).slice(0,5);
   const bearList=valid.filter(x=>x.a.bear>x.a.bull && x.a.bear>x.a.neutral).map(x=>nameOf(x.h.code)+'('+x.h.code+')');
-  let riskHtml='<div class="rtitle">📌 组合关键提示</div><ul class="rlist">';
-  if(bearList.length) riskHtml+='<li>🔻 被大师判为「看空/暂缓」的标的：'+bearList.join('、')+' —— 这些建议优先观望或减仓</li>';
+  let riskHtml='<div class="rtitle"> 组合关键提示</div><ul class="rlist">';
+  if(bearList.length) riskHtml+='<li> 被大师判为「看空/暂缓」的标的：'+bearList.join('、')+' —— 这些建议优先观望或减仓</li>';
   if(topRisks.length) topRisks.forEach(r=>{ const c=tally[r]; riskHtml+='<li>'+r+(c>1?('（'+c+' 只标的共同出现）'):'')+'</li>'; });
   if(!bearList.length && !topRisks.length) riskHtml+='<li>当前组合无明显技术风险信号</li>';
   riskHtml+='</ul>';
@@ -398,10 +398,10 @@ async function renderPortfolioAnalysis(){
     if(hasTA){
       const tg=x.h.target>0?('止盈 '+fmt(x.h.target)):''; const sp=x.h.stop>0?('止损 '+fmt(x.h.stop)):'';
       let hit=''; if(x.h.target>0 && p>=x.h.target) hit=' · 已触及止盈✔'; else if(x.h.stop>0 && p<=x.h.stop) hit=' · 已触及止损⚠';
-      taTxt='<div class="madvice" style="margin-top:6px;">⚙️ 预警线：'+(tg+(tg&&sp?' / ':'')+sp)+hit+'</div>';
+      taTxt='<div class="madvice" style="margin-top:6px;"> 预警线：'+(tg+(tg&&sp?' / ':'')+sp)+hit+'</div>';
     }
     let advice;
-    if(pnl<0){ if(a.bear>a.bull&&a.bear>a.neutral) advice='⚠️ 已浮亏且技术面走弱：大师偏看空，建议严格控仓/设止损，避免越套越深；仓位重可先减一部分。';
+    if(pnl<0){ if(a.bear>a.bull&&a.bear>a.neutral) advice='⚠ 已浮亏且技术面走弱：大师偏看空，建议严格控仓/设止损，避免越套越深；仓位重可先减一部分。';
       else if(a.bull>a.bear&&a.bull>a.neutral) advice='🟢 虽浮亏但技术面转强：可继续持有，资金宽裕可分批小补摊薄成本（忌一次性重仓摊平）。';
       else advice='⚪ 已浮亏、技术面中性：建议持有观察，不急于补仓也不急着割，等方向明确。'; }
     else { if(a.bull>a.bear&&a.bull>a.neutral) advice='🟢 已浮盈且技术面偏强：可继续持有、让利润奔跑，注意设移动止盈。';

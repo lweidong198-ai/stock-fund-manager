@@ -199,7 +199,7 @@ function showMarketFund(code){
   if(state.fundFail && state.fundFail[code]){
     $('mFName').textContent=code; $('mFPrice').textContent='—'; $('mFChg').textContent='—'; $('mFChg').className='flat';
     $('mFMeta').textContent='场外基金 · 单位净值'; $('mFTime').textContent=''; $('mFSub').textContent='';
-    $('mFHint').innerHTML='🌐 此标的为<b>场外基金</b>，净值来自东方财富。当前「预览/沙箱」域名被东方财富反爬拦截，所以这里暂无数据（非 app 故障，<b>本机双击 index.html 可看真实净值</b>）。<br>想在行情看板看基金走势？直接看<b>场内 ETF</b>（走腾讯 K 线，沙箱完全可用）：'+
+    $('mFHint').innerHTML=' 此标的为<b>场外基金</b>，净值来自东方财富。当前「预览/沙箱」域名被东方财富反爬拦截，所以这里暂无数据（非 app 故障，<b>本机双击 index.html 可看真实净值</b>）。<br>想在行情看板看基金走势？直接看<b>场内 ETF</b>（走腾讯 K 线，沙箱完全可用）：'+
       [['sh510300','沪深300ETF'],['sh515050','5G通信ETF'],['sz159915','创业板ETF'],['sz161725','白酒LOF']]
       .map(([c,n])=>`<span class="etf-jump" onclick="addWatch('${c}')">${n}</span>`).join('');
     $('mFStat').textContent='场外基金净值·当前环境不可达（可看场内ETF走势）';
@@ -316,7 +316,7 @@ function renderWatch(){
 function renderWatchCats(){
   const bar=$('watchCats'); if(!bar) return;
   const cur = state.watchCat||'all';
-  let html='<span class="wc-label">📁 分类</span>';
+  let html='<span class="wc-label"> 分类</span>';
   html+='<span class="tg'+(cur==='all'?' on':'')+'" data-cat="all">全部</span>';
   state.watchCats.forEach(c=>{
     const cnt = state.watch.filter(w=>w.cat===c.id).length;
@@ -370,7 +370,7 @@ function nameOf(code){
 function renderHold(){
   renderHoldSelect();
   const box=$('holdBox'); const sum=$('holdSummary');
-  if(!state.hold.length){ box.innerHTML='<div class="empty-state"><div class="es-icon">💼</div><div class="es-title">暂无持仓</div><div class="es-desc">在上方输入代码、数量、成本价，点「加持仓」开始记录。<br>持仓与自选互相独立，不必先加自选。</div><div class="es-actions"><button class="ghost" onclick="goView(\'market\')">去行情看板选标的 →</button></div></div>'; sum.innerHTML=''; const aw0=$('holdAllocWrap'); if(aw0) aw0.style.display='none'; return; }
+  if(!state.hold.length){ box.innerHTML='<div class="empty-state"><div class="es-icon"></div><div class="es-title">暂无持仓</div><div class="es-desc">在上方输入代码、数量、成本价，点「加持仓」开始记录。<br>持仓与自选互相独立，不必先加自选。</div><div class="es-actions"><button class="ghost" onclick="goView(\'market\')">去行情看板选标的 →</button></div></div>'; sum.innerHTML=''; const aw0=$('holdAllocWrap'); if(aw0) aw0.style.display='none'; return; }
   let totMV=0, totCost=0, totPL=0, totDay=0;
   const groups=[
     {label:'股票 / ETF', items: state.hold.filter(h=>!isFundKind(h.code))},
@@ -574,11 +574,11 @@ async function addHold(raw, shares, cost){
 }
 /* 手动加仓：按金额一键加仓（用当前现价/净值计算股数，加权更新成本与数量） */
 function addPositionCash(code, cash){
-  const h=state.hold.find(x=>x.code===code); if(!h){ toast('⚠️ 未找到该持仓'); return; }
+  const h=state.hold.find(x=>x.code===code); if(!h){ toast('⚠ 未找到该持仓'); return; }
   const isF=isFundKind(h.code);
   const price=priceOf(h.code);
   const r=computeAddCash(isF?'fund':'stock', cash, price, h.shares, h.cost);
-  if(!r.ok){ toast('⚠️ '+r.msg); return; }
+  if(!r.ok){ toast('⚠ '+r.msg); return; }
   h.shares=r.newShares; h.cost=r.newCost; save();
   renderHold(); renderHoldSelect();
   if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind!=='fund') renderDetail(); }
@@ -587,11 +587,11 @@ function addPositionCash(code, cash){
 }
 /* 手动减仓：按金额一键减仓（用当前现价/净值计算股数，剩余持仓成本价不变，显示本次实现盈亏） */
 function reducePositionCash(code, cash){
-  const h=state.hold.find(x=>x.code===code); if(!h){ toast('⚠️ 未找到该持仓'); return; }
+  const h=state.hold.find(x=>x.code===code); if(!h){ toast('⚠ 未找到该持仓'); return; }
   const isF=isFundKind(h.code);
   const price=priceOf(h.code);
   const r=computeReduceCash(isF?'fund':'stock', cash, price, h.shares, h.cost);
-  if(!r.ok){ toast('⚠️ '+r.msg); return; }
+  if(!r.ok){ toast('⚠ '+r.msg); return; }
   h.shares=r.newShares; h.cost=r.newCost; save();
   renderHold(); renderHoldSelect();
   if(code===state.selected){ const wk=(state.watch.find(x=>x.code===code)||{}); if(wk.kind!=='fund') renderDetail(); }
@@ -604,7 +604,7 @@ $('btnClearHold').onclick=()=>{ if(confirm('清空全部持仓？')){ state.hold
 $('btnExport').onclick=()=>{ const data={watch:state.watch, hold:state.hold, v:2, exported:new Date().toISOString()}; const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='我的自选持仓备份_'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(a.href); };
 $('btnImport').onclick=()=>$('fileImport').click();
 $('fileImport').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(Array.isArray(d.watch)) state.watch=d.watch; if(Array.isArray(d.hold)) state.hold=d.hold; save(); toast('✓ 备份已导入并保存'); fundCodesToLoad().forEach(c=>loadFund(c)); refreshQuotes(); renderWatch(); renderHold(); renderHoldSelect(); alert('导入成功：'+state.watch.length+' 个自选、'+state.hold.length+' 笔持仓'); }catch(err){ alert('文件格式不对，导入失败'); } }; rd.readAsText(f); e.target.value=''; };
-$('btnRefresh').onclick=()=>{ refreshQuotes(()=>{ if(state.view==='flow') renderFlow(); }); fundCodesToLoad().forEach(c=>loadFund(c, true)); };
+$('btnRefresh').onclick=()=>{ refreshQuotes(()=>{ if(state.view==='flow') renderFlow(); }); fundCodesToLoad().forEach(c=>loadFund(c, true)); refreshTicker(); if(typeof renderTradeCalendar==='function') renderTradeCalendar(); };
 // MACD 参数预设下拉：切换档位 → 副图+速览卡按新参数计算，大师评级不变
 (function(){
   const sel=$('macdPreset'); if(!sel) return;
